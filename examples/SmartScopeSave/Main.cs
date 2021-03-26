@@ -79,10 +79,27 @@ namespace SmartScopeSave
 			switch (k.Key) {
 				case ConsoleKey.Q:
 				case ConsoleKey.X:
-                case ConsoleKey.Escape:
+        case ConsoleKey.Escape:
+					// quit
 					running = false;
 					break;
+				case ConsoleKey.R:
+					// replace sample
+					initFile();
+					scope.Running = true;
+					scope.CommitSettings();
+					break;
+				case ConsoleKey.A:
+					// add sample
+					scope.Running = true;
+					scope.CommitSettings();
+					break;
+			}
+		}
 
+		static void initFile() {
+			using(var sw = new StreamWriter(SAVE_FILENAME)) {
+				sw.WriteLine("D0,D1,D2,D3,D4,D5,D6,D7");
 			}
 		}
 
@@ -161,9 +178,7 @@ namespace SmartScopeSave
 			//Show user what he did
 			PrintScopeConfiguration ();
 
-			using(var sw = new StreamWriter(SAVE_FILENAME)) {
-				sw.WriteLine("D0,D1,D2,D3,D4,D5,D6,D7");
-			}
+			initFile();
 
 			//Set scope runnign;
 			scope.Running = true;
@@ -205,10 +220,12 @@ namespace SmartScopeSave
 					}
 					Console.Write(String.Format("Data saved into: \"{0}\"\n", SAVE_FILENAME));
 					Console.Write(String.Format("  #records: \"{0}\"\n", ba.Length));
+					Console.Write("Press: [R] to replace sample, [A] to add a sample, [Q|X|Esc] to Quit\n");
 					return;
 				}
 			}
 			Console.Write("Timeout while waiting for scope data.\n");
+			running = false;
 		}
 
 		static void PrintScopeConfiguration ()
