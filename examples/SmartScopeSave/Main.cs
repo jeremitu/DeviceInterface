@@ -18,8 +18,7 @@ using System.Windows.Forms;
 
 namespace SmartScopeSave
 {
-	class MainClass
-	{
+	class MainClass {
 		/// <summary>
 		/// The DeviceManager detects device connections
 		/// </summary>
@@ -30,7 +29,72 @@ namespace SmartScopeSave
 		static IScope scope;
 		static bool running = true;
 
-        [STAThread]
+		// 4M 2M 1M 512K 256K 128K
+		static uint[] AcqDepthData = new uint[] {
+			4 * 1024 * 1024, 2 * 1024 * 1024, 1 * 1024 * 1024,
+			512 * 1024, 256 * 1024, 128 * 1024 };
+		static string[] AcqDepthDataStr = new string[] {
+			"4M", "2M", "1M",	"512K", "256K", "128K" };
+		static int acqDepthIndex = 2;
+		//enum ACQ_DEPTH { AD_4M, AD_2M, AD_1M, AD_512K, AD_256K, AD_128K };
+		//static ACQ_DEPTH acqDepth = ACQ_DEPTH.AD_1M;
+
+		static void updateAcqDepthValue() {
+			scope.AcquisitionDepth = AcqDepthData[acqDepthIndex];
+			scope.CommitSettings();
+			Console.Write(String.Format("new Acquisition Depth: {0}({1})\n", AcqDepthDataStr[acqDepthIndex], scope.AcquisitionDepth));
+		}
+
+		/*static void updateAcqDepthValue(ACQ_DEPTH acqDepth) {
+			uint ad = 1024;
+			switch(acqDepth) {
+				case ACQ_DEPTH.AD_4M:
+					ad *= 4 * 1024; 
+					break;
+				case ACQ_DEPTH.AD_2M:
+					ad *= 2 * 1024;
+					break;
+				case ACQ_DEPTH.AD_1M:
+					ad *= 1 * 1024;
+					break;
+				case ACQ_DEPTH.AD_512K:
+					ad *= 512;
+					break;
+				case ACQ_DEPTH.AD_256K:
+					ad *= 256;
+					break;
+				case ACQ_DEPTH.AD_128K:
+					ad *= 128;
+					break;
+			}
+			scope.AcquisitionDepth = ad;
+			scope.CommitSettings();
+			Console.Write(String.Format("new Acquisition Depth: {0}\n", scope.AcquisitionDepth));
+		}
+
+		static ACQ_DEPTH prevAcqDepth(ACQ_DEPTH acqDepth) {
+			switch(acqDepth) {
+				case ACQ_DEPTH.AD_4M: return ACQ_DEPTH.AD_2M;
+				case ACQ_DEPTH.AD_2M: return ACQ_DEPTH.AD_1M;
+				case ACQ_DEPTH.AD_1M: return ACQ_DEPTH.AD_512K;
+				case ACQ_DEPTH.AD_512K: return ACQ_DEPTH.AD_256K;
+				case ACQ_DEPTH.AD_256K: return ACQ_DEPTH.AD_128K;
+				default: return ACQ_DEPTH.AD_4M;
+			}
+		}
+
+		static ACQ_DEPTH nextAcqDepth(ACQ_DEPTH acqDepth) {
+			switch(acqDepth) {
+				case ACQ_DEPTH.AD_4M: return ACQ_DEPTH.AD_128K;
+				case ACQ_DEPTH.AD_2M: return ACQ_DEPTH.AD_4M;
+				case ACQ_DEPTH.AD_1M: return ACQ_DEPTH.AD_2M;
+				case ACQ_DEPTH.AD_512K: return ACQ_DEPTH.AD_1M;
+				case ACQ_DEPTH.AD_256K: return ACQ_DEPTH.AD_512K;
+				default: return ACQ_DEPTH.AD_256K;
+			}
+		}*/
+
+		[STAThread]
 		static void Main (string[] args)
 		{
 			//Open logger on console window
@@ -94,6 +158,28 @@ namespace SmartScopeSave
 					scope.Running = true;
 					scope.CommitSettings();
 					break;
+				default:
+					switch(k.KeyChar) {
+						case '[':
+							acqDepthIndex--;
+							if(acqDepthIndex < 0)
+								acqDepthIndex = AcqDepthData.Length - 1;
+							updateAcqDepthValue();
+							//acqDepth = prevAcqDepth(acqDepth);
+							//updateAcqDepthValue(acqDepth);
+							break;
+						case ']':
+							acqDepthIndex++;
+							if(acqDepthIndex >= AcqDepthData.Length)
+								acqDepthIndex =  0;
+							updateAcqDepthValue();
+							//acqDepth = nextAcqDepth(acqDepth);
+							//updateAcqDepthValue(acqDepth);
+							break;
+					}
+					break;
+				//case ConsoleKey.:
+				//	break;
 			}
 		}
 
@@ -138,7 +224,8 @@ namespace SmartScopeSave
 
 			//Set sample depth to the minimum for a max datarate
 			//scope.AcquisitionLength = scope.AcquisitionLengthMin; 
-			scope.AcquisitionDepth = 1024 * 1024;// scope.AcquisitionDepthMax;
+			scope.AcquisitionDepthUserMaximum = 4 * 1024 * 1024;
+			scope.AcquisitionDepth = AcqDepthData[acqDepthIndex];
 			scope.AcquisitionLength = 0.2;
 
 			/*******************************/
@@ -218,9 +305,9 @@ namespace SmartScopeSave
 							sw.WriteLine(l);
 						}
 					}
-					Console.Write(String.Format("Data saved into: \"{0}\"\n", SAVE_FILENAME));
-					Console.Write(String.Format("  #records: \"{0}\"\n", ba.Length));
-					Console.Write("Press: [R] to replace sample, [A] to add a sample, [Q|X|Esc] to Quit\n");
+					Console.Write(String.Format("Saved {0} records into: \"{1}\"\n", ba.Length, SAVE_FILENAME));
+					Console.Write(String.Format("  Acq. Depth: {0}, Acq. Length\n", scope.AcquisitionDepth, scope.AcquisitionLength));
+					Console.Write("'R':replace, 'A':add, '[]':prev/next AcqDepth, 'Q|X|Esc' to Quit\n");
 					return;
 				}
 			}
