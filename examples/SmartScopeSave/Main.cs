@@ -94,6 +94,7 @@ namespace SmartScopeSave
 					break;
 				case ConsoleKey.R:
 					// replace sample
+					Console.WriteLine("Collecting...");
 					sampleSerializer.initialize();
 					scope.Running = true;
 					scope.CommitSettings();
@@ -262,7 +263,8 @@ namespace SmartScopeSave
 						sampleSerializer.handleSample(b);
 					}
 					sampleSerializer.finalize();
-					Console.Write(String.Format("Saved {0} records into: \"{1}\"\n", ba.Length, sampleSerializer.getFileName()));
+					Console.Write(String.Format("Saved {0} samples using {1} records into file \"{2}\"\n",
+						ba.Length, sampleSerializer.getNumberOfSavedRecords(), sampleSerializer.getFileName()));
 					printScopeAcqConfig();
 					//Console.Write("'R':replace, 'A':add, '[]':prev/next AcqDepth, 'Q|X|Esc' to Quit\n");
 					Console.Write("'R':replace, '[]':prev/next AcqDepth, 'Q|X|Esc' to Quit\n");
@@ -304,5 +306,6 @@ namespace SmartScopeSave
 			c += "---------------------------------------------\n";
 			Console.Write (c);				
 		}
+
 	}
 }
