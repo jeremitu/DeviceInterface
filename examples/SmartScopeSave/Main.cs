@@ -98,12 +98,12 @@ namespace SmartScopeSave
 					scope.Running = true;
 					scope.CommitSettings();
 					break;
-				case ConsoleKey.A:
+				/*case ConsoleKey.A:
 					// add sample
 					sampleSerializer.reopen();
 					scope.Running = true;
 					scope.CommitSettings();
-					break;
+					break;*/
 				default:
 					switch(k.KeyChar) {
 						case '[':
@@ -143,7 +143,8 @@ namespace SmartScopeSave
 			}
 		}
 
-		static Serializers.ISampleSerializer sampleSerializer = new Serializers.CSVSerializer();
+		//static Serializers.ISampleSerializer sampleSerializer = new Serializers.CSVSerializer();
+		static Serializers.ISampleSerializer sampleSerializer = new Serializers.VCDSerializer();
 
 
 		static void ConfigureScope ()
@@ -263,7 +264,8 @@ namespace SmartScopeSave
 					sampleSerializer.finalize();
 					Console.Write(String.Format("Saved {0} records into: \"{1}\"\n", ba.Length, sampleSerializer.getFileName()));
 					printScopeAcqConfig();
-					Console.Write("'R':replace, 'A':add, '[]':prev/next AcqDepth, 'Q|X|Esc' to Quit\n");
+					//Console.Write("'R':replace, 'A':add, '[]':prev/next AcqDepth, 'Q|X|Esc' to Quit\n");
+					Console.Write("'R':replace, '[]':prev/next AcqDepth, 'Q|X|Esc' to Quit\n");
 					return;
 				}
 			}

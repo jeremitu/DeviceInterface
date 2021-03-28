@@ -22,6 +22,7 @@ namespace SmartScopeSave {
 		public class CSVSerializer : ISampleSerializer {
 			static public string SAVE_FILENAME = "smartscope.csv";
 			protected StreamWriter sw = null;
+			protected bool hasTimeColumn = true;
 			protected double samplePeriod;
 			protected double timeOffset;
 			protected double runningTimeOffset;
@@ -47,7 +48,7 @@ namespace SmartScopeSave {
 			}
 
 			void ISampleSerializer.handleSample(byte sample) {
-				var l = String.Format(nfi, "{0:N9},", runningTimeOffset);
+				var l = hasTimeColumn ? String.Format(nfi, "{0:N9},", runningTimeOffset) : "";
 				runningTimeOffset += samplePeriod;
 				for(byte i = 0; i < 8; i++) {
 					byte mask = (byte)(0x01 << i);
@@ -66,7 +67,15 @@ namespace SmartScopeSave {
 			static public string SAVE_FILENAME = "smartscope.vcd";
 			protected StreamWriter sw = null;
 			protected double samplePeriod;
+			protected UInt64 sampleInc;
 			protected double timeOffset;
+			protected UInt64 runningTimeOffset;
+			protected byte[] channelValues = new byte[8] {
+				0, 0, 0, 0, 0, 0, 0, 0
+			};
+			public static string[] channelChars = new string[8] {
+				"!", "@", "#", "$", "%", "^", "&", "*"
+			};
 
 			string ISampleSerializer.getFileName() { return SAVE_FILENAME; }
 
@@ -74,51 +83,61 @@ namespace SmartScopeSave {
 				if(sw != null)
 					sw.Close();
 				sw = new StreamWriter(SAVE_FILENAME);
-				/*
-				$date Sat Mar 27 10:35:40 2021 $end
-				$version libsigrok 0.5.2 $end
-				$comment
-					Acquisition with 5 / 8 channels at 1.56 MHz
-				$end
-				$timescale 1 ns $end
-				$scope module libsigrok $end
-				$var wire 1! D0 $end
-				$var wire 1 " D1 $end
-				$var wire 1 # D2 $end
-				$var wire 1 $ D3 $end
-				$var wire 1 % D4 $end
-				$upscope $end
-				$enddefinitions $end
-				*/
-				sw.WriteLine("D0,D1,D2,D3,D4,D5,D6,D7");
 			}
 
 			void ISampleSerializer.prepareForSamples(double samplePeriod, double timeOffset) {
 				this.samplePeriod = samplePeriod;
+				sampleInc = (UInt64)(samplePeriod * 1e8); // scale to 10 ns
 				this.timeOffset = timeOffset;
+				runningTimeOffset = 0; // timeOffset;
+
+				// header
+				sw.WriteLine(String.Format("$date {0} $end", DateTime.Now.ToUniversalTime()));
+				sw.WriteLine("$comment");
+				sw.WriteLine("  SmartScope samples. Period: {0}$", samplePeriod);
+				sw.WriteLine("$end");
+				sw.WriteLine(String.Format("$timescale 10ns $end"));
+				sw.WriteLine("$scope module SmartScope $end");
+				for(int i = 0; i < channelChars.Length; i++)
+					sw.WriteLine(String.Format("$var wire 1 {0} D{1} $end", channelChars[i], i));
+				sw.WriteLine("$upscope $end");
+				sw.WriteLine("$enddefinitions $end");
+
+				// first data line
+				string firstLine = "#0 0"+ channelChars[0];
+				for(int i = 1; i < channelChars.Length; i++)
+					firstLine += " 0" + channelChars[i];
+				sw.WriteLine(firstLine);
+
 			}
 
 			void ISampleSerializer.reopen() {
 				sw = new StreamWriter(SAVE_FILENAME, true); // append
 			}
 
-			static public bool[] getBits(byte sample) {
-				bool[] bits = new bool[8];
+			static public byte[] getBits(byte sample) {
+				byte[] bits = new byte[8];
 				for(byte i = 0; i < 8; i++) {
 					byte mask = (byte)(0x01 << i);
-					bits[i] = (mask & sample) > 0;
+					bits[i] = (byte)((mask & sample) > 0 ? 1 : 0);
 				}
 				return bits;
 			}
 
 			void ISampleSerializer.handleSample(byte sample) {
+				runningTimeOffset += sampleInc;
+				byte[] sampleValues = getBits(sample);
 				var l = "";
 				for(byte i = 0; i < 8; i++) {
-					byte mask = (byte)(0x01 << i);
-					l += (mask & sample) > 0 ? '1' : '0';
-					if(i < 7) l += ',';
+					if(sampleValues[i] != channelValues[i]) {
+						if(l.Length == 0)
+							l = "#" + runningTimeOffset;
+						l += " " + sampleValues[i] + channelChars[i];
+						channelValues[i] = sampleValues[i]; // save new value
+					}
 				}
-				sw.WriteLine(l);
+				if(l.Length > 0)
+				  sw.WriteLine(l);
 			}
 
 			void ISampleSerializer.finalize() {
