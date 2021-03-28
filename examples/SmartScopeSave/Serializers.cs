@@ -12,7 +12,7 @@ namespace SmartScopeSave {
 
 		public interface ISampleSerializer {
 			void initialize();
-			void prepareForSamples(double samplePeriod, double timeOffset);
+			void prepareForSamples(double samplePeriod, double timeOffset, string[] meta);
 			void handleSample(byte sample);
 			void reopen();
 			void finalize();
@@ -36,14 +36,18 @@ namespace SmartScopeSave {
 				if(sw != null)
 					sw.Close();
 				sw = new StreamWriter(SAVE_FILENAME);
-				sw.WriteLine("Time,D0,D1,D2,D3,D4,D5,D6,D7");
 			}
 
-			void ISampleSerializer.prepareForSamples(double samplePeriod, double timeOffset) {
+			void ISampleSerializer.prepareForSamples(double samplePeriod, double timeOffset, string[] meta) {
 				this.samplePeriod = samplePeriod;
 				this.timeOffset = timeOffset;
 				runningTimeOffset = timeOffset;
 				numberOfSavedRecords = 0;
+
+				sw.WriteLine(";  SmartScopeSave:");
+				foreach(string ms in meta)
+					sw.WriteLine(";    " + ms);
+				sw.WriteLine("Time,D0,D1,D2,D3,D4,D5,D6,D7");
 			}
 
 			void ISampleSerializer.reopen() {
@@ -95,7 +99,7 @@ namespace SmartScopeSave {
 				sw = new StreamWriter(SAVE_FILENAME);
 			}
 
-			void ISampleSerializer.prepareForSamples(double samplePeriod, double timeOffset) {
+			void ISampleSerializer.prepareForSamples(double samplePeriod, double timeOffset, string[] meta) {
 				this.samplePeriod = samplePeriod;
 				sampleInc = (UInt64)(samplePeriod * 1e8); // scale to 10 ns
 				this.timeOffset = timeOffset;
@@ -104,7 +108,9 @@ namespace SmartScopeSave {
 				// header
 				sw.WriteLine(String.Format("$date {0} $end", DateTime.Now.ToUniversalTime()));
 				sw.WriteLine("$comment");
-				sw.WriteLine("  SmartScope samples. Period: {0}$", samplePeriod);
+				sw.WriteLine("  SmartScopeSave:");
+				foreach(string ms in meta)
+					sw.WriteLine("    " + ms);
 				sw.WriteLine("$end");
 				sw.WriteLine(String.Format("$timescale 10ns $end"));
 				sw.WriteLine("$scope module SmartScope $end");

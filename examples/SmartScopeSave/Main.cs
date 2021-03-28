@@ -231,6 +231,14 @@ namespace SmartScopeSave
 			scope.CommitSettings ();
 		}
 
+		static string[] getScopeMetaStrings() {
+			return new string[] {
+				String.Format("Acquisition Depth  : {0}", Utils.siPrint(scope.AcquisitionDepth, 1, 3, "Sa", 1024)),
+				String.Format("Acquisition Length : {0}", Utils.siPrint(scope.AcquisitionLength, 1e-9, 3, "s")),
+				String.Format("Sample Rate        : {0}", Utils.siPrint(1.0 / scope.SamplePeriod, 1, 3, "Hz"))
+			};
+		}
+
 		static void printScopeAcqConfig() {
 			Console.Write(String.Format("  Acq. Depth: {0}, Acq. Length: {1}, Sample rate: {2}\n",
 							Utils.siPrint(scope.AcquisitionDepth, 1, 3, "Sa", 1024),
@@ -258,7 +266,7 @@ namespace SmartScopeSave
 				if(dps.GetData(ChannelDataSourceScope.Acquisition, AnalogChannel.ChB.Raw()) != null) {
 					ChannelData cd = dps.GetData(ChannelDataSourceScope.Acquisition, AnalogChannelRaw.List[1]); // [1] for channel B
 					byte[] ba = (byte[])cd.array;
-					sampleSerializer.prepareForSamples(cd.samplePeriod, cd.timeOffset);
+					sampleSerializer.prepareForSamples(cd.samplePeriod, cd.timeOffset, getScopeMetaStrings());
 					foreach(byte b in ba) {
 						sampleSerializer.handleSample(b);
 					}
