@@ -94,12 +94,13 @@ namespace SmartScopeSave
 					break;
 				case ConsoleKey.R:
 					// replace sample
-					initFile();
+					sampleSerializer.initialize();
 					scope.Running = true;
 					scope.CommitSettings();
 					break;
 				case ConsoleKey.A:
 					// add sample
+					sampleSerializer.reopen();
 					scope.Running = true;
 					scope.CommitSettings();
 					break;
@@ -142,11 +143,8 @@ namespace SmartScopeSave
 			}
 		}
 
-		static void initFile() {
-			using(var sw = new StreamWriter(SAVE_FILENAME)) {
-				sw.WriteLine("D0,D1,D2,D3,D4,D5,D6,D7");
-			}
-		}
+		static Serializers.ISampleSerializer sampleSerializer = new Serializers.CSVSerializer();
+
 
 		static void ConfigureScope ()
 		{
@@ -224,14 +222,12 @@ namespace SmartScopeSave
 			//Show user what he did
 			PrintScopeConfiguration ();
 
-			initFile();
+			sampleSerializer.initialize();
 
 			//Set scope runnign;
 			scope.Running = true;
 			scope.CommitSettings ();
 		}
-
-		static string SAVE_FILENAME = "smartscope.csv";
 
 		static void printScopeAcqConfig() {
 			Console.Write(String.Format("  Acq. Depth: {0}, Acq. Length: {1}, Sample rate: {2}\n",
@@ -260,18 +256,12 @@ namespace SmartScopeSave
 				if(dps.GetData(ChannelDataSourceScope.Acquisition, AnalogChannel.ChB.Raw()) != null) {
 					ChannelData cd = dps.GetData(ChannelDataSourceScope.Acquisition, AnalogChannelRaw.List[1]); // [1] for channel B
 					byte[] ba = (byte[])cd.array;
-					using(StreamWriter sw = File.AppendText(SAVE_FILENAME)) {
-						foreach(byte b in ba) {
-							var l = "";
-							for(byte i = 0; i < 8; i++) {
-								byte mask = (byte)(0x01 << i);
-								l += (mask & b) > 0 ? '1' : '0';
-								if(i < 7) l += ',';
-							}
-							sw.WriteLine(l);
-						}
+					sampleSerializer.prepareForSamples(cd.samplePeriod, cd.timeOffset);
+					foreach(byte b in ba) {
+						sampleSerializer.handleSample(b);
 					}
-					Console.Write(String.Format("Saved {0} records into: \"{1}\"\n", ba.Length, SAVE_FILENAME));
+					sampleSerializer.finalize();
+					Console.Write(String.Format("Saved {0} records into: \"{1}\"\n", ba.Length, sampleSerializer.getFileName()));
 					printScopeAcqConfig();
 					Console.Write("'R':replace, 'A':add, '[]':prev/next AcqDepth, 'Q|X|Esc' to Quit\n");
 					return;
