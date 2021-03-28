@@ -17,6 +17,7 @@ namespace SmartScopeSave {
 			void reopen();
 			void finalize();
 			string getFileName();
+			ulong getNumberOfSavedRecords();
 		}
 
 		public class CSVSerializer : ISampleSerializer {
@@ -26,6 +27,7 @@ namespace SmartScopeSave {
 			protected double samplePeriod;
 			protected double timeOffset;
 			protected double runningTimeOffset;
+			protected ulong numberOfSavedRecords;
 			NumberFormatInfo nfi = new CultureInfo("en-US", false).NumberFormat;
 
 			string ISampleSerializer.getFileName() { return SAVE_FILENAME; }
@@ -41,6 +43,7 @@ namespace SmartScopeSave {
 				this.samplePeriod = samplePeriod;
 				this.timeOffset = timeOffset;
 				runningTimeOffset = timeOffset;
+				numberOfSavedRecords = 0;
 			}
 
 			void ISampleSerializer.reopen() {
@@ -56,12 +59,17 @@ namespace SmartScopeSave {
 					if(i < 7) l += ',';
 				}
 				sw.WriteLine(l);
+				numberOfSavedRecords++;
 			}
 
 			void ISampleSerializer.finalize() {
 				sw.Close();
 			}
-		}
+
+      ulong ISampleSerializer.getNumberOfSavedRecords() {
+				return numberOfSavedRecords;
+			}
+    }
 
 		public class VCDSerializer : ISampleSerializer {
 			static public string SAVE_FILENAME = "smartscope.vcd";
@@ -70,6 +78,8 @@ namespace SmartScopeSave {
 			protected UInt64 sampleInc;
 			protected double timeOffset;
 			protected UInt64 runningTimeOffset;
+			protected bool firstSampleSeen = false;
+			protected ulong numberOfSavedRecords;
 			protected byte[] channelValues = new byte[8] {
 				0, 0, 0, 0, 0, 0, 0, 0
 			};
@@ -103,12 +113,7 @@ namespace SmartScopeSave {
 				sw.WriteLine("$upscope $end");
 				sw.WriteLine("$enddefinitions $end");
 
-				// first data line
-				string firstLine = "#0 0"+ channelChars[0];
-				for(int i = 1; i < channelChars.Length; i++)
-					firstLine += " 0" + channelChars[i];
-				sw.WriteLine(firstLine);
-
+				numberOfSavedRecords = 0;
 			}
 
 			void ISampleSerializer.reopen() {
@@ -125,24 +130,48 @@ namespace SmartScopeSave {
 			}
 
 			void ISampleSerializer.handleSample(byte sample) {
-				runningTimeOffset += sampleInc;
-				byte[] sampleValues = getBits(sample);
 				var l = "";
-				for(byte i = 0; i < 8; i++) {
-					if(sampleValues[i] != channelValues[i]) {
-						if(l.Length == 0)
-							l = "#" + runningTimeOffset;
+				byte[] sampleValues = getBits(sample);
+
+				if(!firstSampleSeen) {
+
+					// first data line
+					l = "#0";
+					for(byte i = 0; i < 8; i++) {
 						l += " " + sampleValues[i] + channelChars[i];
 						channelValues[i] = sampleValues[i]; // save new value
 					}
+					runningTimeOffset = 0;
+					firstSampleSeen = true;
+
+				} else {
+
+					runningTimeOffset += sampleInc;
+					for(byte i = 0; i < 8; i++) {
+						if(sampleValues[i] != channelValues[i]) {
+							if(l.Length == 0)
+								l = "#" + runningTimeOffset;
+							l += " " + sampleValues[i] + channelChars[i];
+							channelValues[i] = sampleValues[i]; // save new value
+						}
+					}
+
 				}
-				if(l.Length > 0)
-				  sw.WriteLine(l);
+
+				if(l.Length > 0) {
+					sw.WriteLine(l);
+					numberOfSavedRecords++;
+				}
 			}
 
 			void ISampleSerializer.finalize() {
 				sw.Close();
 			}
+
+			ulong ISampleSerializer.getNumberOfSavedRecords() {
+				return numberOfSavedRecords;
+			}
+
 		}
 
 	}
