@@ -189,6 +189,7 @@ namespace SmartScopeSave
 							acqDepthIndex--;
 							if(acqDepthIndex < 0)
 								acqDepthIndex = 0; // AcqDepthData.Length - 1;
+							scope.AcquisitionDepthUserMaximum = AcqDepthData[acqDepthIndex];
 							scope.AcquisitionDepth = AcqDepthData[acqDepthIndex];
 							scope.CommitSettings();
 							printScopeAcqConfig();
@@ -197,6 +198,7 @@ namespace SmartScopeSave
 							acqDepthIndex++;
 							if(acqDepthIndex >= AcqDepthData.Length)
 								acqDepthIndex = AcqDepthData.Length - 1; // 0
+							scope.AcquisitionDepthUserMaximum = AcqDepthData[acqDepthIndex];
 							scope.AcquisitionDepth = AcqDepthData[acqDepthIndex];
 							scope.CommitSettings();
 							printScopeAcqConfig();
@@ -261,30 +263,12 @@ namespace SmartScopeSave
 
 			//Set sample depth to the minimum for a max datarate
 			//scope.AcquisitionLength = scope.AcquisitionLengthMin; 
-			scope.AcquisitionDepthUserMaximum = 4 * 1024 * 1024;
+
+			//Console.WriteLine("Setting AcquisitionDepth to " + acquisitionDepth);
+			scope.AcquisitionDepthUserMaximum = acquisitionDepth;
 			scope.AcquisitionDepth = acquisitionDepth;
+			//Console.WriteLine("Setting AcquisitionLength to " + acquisitionLength);
 			scope.AcquisitionLength = acquisitionLength;
-
-			/*******************************/
-			/* Vertical / voltage settings */
-			/*******************************/
-			/*foreach (AnalogChannel ch in AnalogChannel.List) {
-				//FIRST set vertical range
-				scope.SetVerticalRange (ch, -3, 3);
-				//THEN set vertical offset (dicated by range)
-				scope.SetYOffset (ch, 0);
-				//use DC coupling
-				scope.SetCoupling (ch, Coupling.DC);
-				//and x10 probes
-				ch.SetProbe(Probe.DefaultX10Probe);
-			}*/
-
-			// Set trigger to channel A
-			/*scope.TriggerValue = new TriggerValue () {
-				channel = AnalogChannel.ChA,
-				edge = TriggerEdge.RISING,
-				level = 1.0f
-			};*/
 
 			// Digital trigger 
 			System.Collections.Generic.Dictionary<DigitalChannel, DigitalTriggerValue> digitalTriggers = scope.TriggerValue.Digital;
