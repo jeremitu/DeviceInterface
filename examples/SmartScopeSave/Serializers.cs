@@ -17,11 +17,12 @@ namespace SmartScopeSave {
 			void reopen();
 			void finalize();
 			string getFileName();
+			void setFileName(string fileName);
 			ulong getNumberOfSavedRecords();
 		}
 
 		public class CSVSerializer : ISampleSerializer {
-			static public string SAVE_FILENAME = "smartscope.csv";
+			public string saveFileName = "smartscope.csv";
 			protected StreamWriter sw = null;
 			protected bool hasTimeColumn = true;
 			protected double samplePeriod;
@@ -30,12 +31,13 @@ namespace SmartScopeSave {
 			protected ulong numberOfSavedRecords;
 			NumberFormatInfo nfi = new CultureInfo("en-US", false).NumberFormat;
 
-			string ISampleSerializer.getFileName() { return SAVE_FILENAME; }
+			string ISampleSerializer.getFileName() { return saveFileName; }
+			void ISampleSerializer.setFileName(string fileName) { saveFileName = fileName; }
 
 			void ISampleSerializer.initialize() {
 				if(sw != null)
 					sw.Close();
-				sw = new StreamWriter(SAVE_FILENAME);
+				sw = new StreamWriter(saveFileName);
 			}
 
 			void ISampleSerializer.prepareForSamples(double samplePeriod, double timeOffset, string[] meta) {
@@ -51,7 +53,7 @@ namespace SmartScopeSave {
 			}
 
 			void ISampleSerializer.reopen() {
-				sw = new StreamWriter(SAVE_FILENAME, true); // append
+				sw = new StreamWriter(saveFileName, true); // append
 			}
 
 			void ISampleSerializer.handleSample(byte sample) {
@@ -76,7 +78,7 @@ namespace SmartScopeSave {
     }
 
 		public class VCDSerializer : ISampleSerializer {
-			static public string SAVE_FILENAME = "smartscope.vcd";
+			public string saveFileName = "smartscope.vcd";
 			protected StreamWriter sw = null;
 			protected double samplePeriod;
 			protected UInt64 sampleInc;
@@ -91,12 +93,13 @@ namespace SmartScopeSave {
 				"!", "@", "#", "$", "%", "^", "&", "*"
 			};
 
-			string ISampleSerializer.getFileName() { return SAVE_FILENAME; }
+			string ISampleSerializer.getFileName() { return saveFileName; }
+			void ISampleSerializer.setFileName(string fileName) { saveFileName = fileName; }
 
 			void ISampleSerializer.initialize() {
 				if(sw != null)
 					sw.Close();
-				sw = new StreamWriter(SAVE_FILENAME);
+				sw = new StreamWriter(saveFileName);
 			}
 
 			void ISampleSerializer.prepareForSamples(double samplePeriod, double timeOffset, string[] meta) {
@@ -123,7 +126,7 @@ namespace SmartScopeSave {
 			}
 
 			void ISampleSerializer.reopen() {
-				sw = new StreamWriter(SAVE_FILENAME, true); // append
+				sw = new StreamWriter(saveFileName, true); // append
 			}
 
 			static public byte[] getBits(byte sample) {
