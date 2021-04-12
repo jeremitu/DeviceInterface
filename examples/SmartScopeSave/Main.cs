@@ -43,6 +43,8 @@ namespace SmartScopeSave
 		static double acquisitionLength = AcqLengthData[acqLengthIndex];
 
 		static bool optInteractive = false;
+		static DigitalTriggerValue digitalTriggerValue = DigitalTriggerValue.L;
+		static DigitalChannel digitalTriggerChannel = DigitalChannel.Digi1;
 
 		[STAThread]
 		static void Main (string[] args)
@@ -83,6 +85,16 @@ namespace SmartScopeSave
 						}
 						break;
 
+					case "--trigger":
+						try {
+							string[] triggerParam = args[++i].Split(':');
+							digitalTriggerChannel = parseDigitalChannel(triggerParam[0]);
+							digitalTriggerValue = (DigitalTriggerValue)Enum.Parse(typeof(DigitalTriggerValue), triggerParam[1]);
+						} catch(Exception) {
+							Console.WriteLine($"Unable to parse channel and value from trigger param '{args[i]}'");
+						}
+						break;
+
 					case "--file-name":
 						sampleSerializer.setFileName(args[++i]);
 						break;
@@ -96,7 +108,6 @@ namespace SmartScopeSave
 					default:
 						printHelp();
 						return;
-						break;
 				}
 			}
 
@@ -139,11 +150,12 @@ namespace SmartScopeSave
 			Console.WriteLine("  --non-interactive     : exit after acquisition");
 			Console.WriteLine("  --acq-depth <depth>   : acquisition depth");
 			Console.WriteLine("  --acq-length <length> : acquisition length");
+			Console.WriteLine("  --trigger <param>     : trigger channel [0..7] & value [LHFR], example: D1:L");
 			Console.WriteLine("  --file-name <name>    : file name");
 			Console.WriteLine("  --enable-log          : enable log and print it");
 			Console.WriteLine("   -h");
 			Console.WriteLine("  --help                : show this message");
-			Console.WriteLine($"Defaults: vcd({sampleSerializer.getFileName()}), non-interactive, 1M, 0.2s");
+			Console.WriteLine($"Defaults: vcd({sampleSerializer.getFileName()}), non-interactive, 1M, 0.2s, trigger: 1L");
 		}
 
 		static void connectHandler (IDevice dev, bool connected)
@@ -272,7 +284,7 @@ namespace SmartScopeSave
 
 			// Digital trigger 
 			System.Collections.Generic.Dictionary<DigitalChannel, DigitalTriggerValue> digitalTriggers = scope.TriggerValue.Digital;
-			digitalTriggers[DigitalChannel.Digi1] = DigitalTriggerValue.L;
+			digitalTriggers[digitalTriggerChannel] = digitalTriggerValue;
 			scope.TriggerValue = new TriggerValue() {
 				mode = TriggerMode.Digital,
 				source = TriggerSource.Channel,
@@ -355,7 +367,6 @@ namespace SmartScopeSave
 		{
 			string c = "";
 			string f = "{0,-20}: {1:s}\n";
-			string fCh = "Channel {0:s} - {1,-15:s}: {2:s}\n";
 			c += "---------------------------------------------\n";
 			c += "-              SCOPE SETTINGS               -\n";
 			c += "---------------------------------------------\n";
@@ -366,13 +377,16 @@ namespace SmartScopeSave
 			c += String.Format (f, "Viewport offset", Utils.siPrint (scope.ViewPortOffset, 1e-9, 3, "s"));
 			c += String.Format (f, "Viewport timespan", Utils.siPrint (scope.ViewPortTimeSpan, 1e-9, 3, "s"));	
 			c += String.Format (f, "Trigger holdoff", Utils.siPrint (scope.TriggerHoldOff, 1e-9, 3, "s"));
+			c += String.Format (f, "Trigger channel", digitalTriggerChannel);
+			c += String.Format (f, "Trigger value", digitalTriggerValue);
 			c += String.Format (f, "Acquisition mode", scope.AcquisitionMode.ToString ("G"));
 			c += String.Format (f, "Rolling", scope.Rolling.YesNo ());
 			c += String.Format (f, "Partial", scope.PreferPartial.YesNo ());
 			c += String.Format (f, "Logic Analyser", scope.LogicAnalyserEnabled.YesNo ());
 
 
-			/*foreach (AnalogChannel ch in AnalogChannel.List) {
+			/*string fCh = "Channel {0:s} - {1,-15:s}: {2:s}\n";
+			foreach (AnalogChannel ch in AnalogChannel.List) {
 				string chName = ch.Name;
 				c += String.Format ("======= Channel {0:s} =======\n", chName);
 				c += String.Format (fCh, chName, "Vertical offset", printVolt (scope.GetYOffset (ch)));
@@ -383,5 +397,23 @@ namespace SmartScopeSave
 			Console.Write (c);				
 		}
 
+		static DigitalChannel parseDigitalChannel(string dc) {
+			dc = dc.ToUpper();
+			if(dc == "D1")
+				return DigitalChannel.Digi1;
+			if(dc == "D2")
+				return DigitalChannel.Digi2;
+			if(dc == "D3")
+				return DigitalChannel.Digi3;
+			if(dc == "D4")
+				return DigitalChannel.Digi4;
+			if(dc == "D5")
+				return DigitalChannel.Digi5;
+			if(dc == "D6")
+				return DigitalChannel.Digi6;
+			if(dc == "D7")
+				return DigitalChannel.Digi7;
+			return DigitalChannel.Digi0;
+		}
 	}
 }
