@@ -12,8 +12,10 @@ namespace SmartScopeSave {
 
 		public interface ISampleSerializer {
 			void initialize();
-			void prepareForSamples(double samplePeriod, double timeOffset, string[] meta);
-			void handleSample(byte sample);
+			void prepareForLogicalSamples(double samplePeriod, double timeOffset, string[] meta);
+			void handleLogicalSample(byte sample);
+			void prepareForAnalogSamples(double samplePeriod, double timeOffset, string[] meta);
+			void handleAnalogSamples(float[] samples);
 			void reopen();
 			void finalize();
 			string getFileName();
@@ -40,7 +42,7 @@ namespace SmartScopeSave {
 				sw = new StreamWriter(saveFileName);
 			}
 
-			void ISampleSerializer.prepareForSamples(double samplePeriod, double timeOffset, string[] meta) {
+			void ISampleSerializer.prepareForLogicalSamples(double samplePeriod, double timeOffset, string[] meta) {
 				this.samplePeriod = samplePeriod;
 				this.timeOffset = timeOffset;
 				runningTimeOffset = timeOffset;
@@ -52,11 +54,34 @@ namespace SmartScopeSave {
 				sw.WriteLine("Time,D0,D1,D2,D3,D4,D5,D6,D7");
 			}
 
+			void ISampleSerializer.prepareForAnalogSamples(double samplePeriod, double timeOffset, string[] meta) {
+				this.samplePeriod = samplePeriod;
+				this.timeOffset = timeOffset;
+				runningTimeOffset = timeOffset;
+				numberOfSavedRecords = 0;
+
+				sw.WriteLine(";  SmartScopeSave:");
+				foreach(string ms in meta)
+					sw.WriteLine(";    " + ms);
+				sw.WriteLine("Time,A0,A1");
+			}
+
+			void ISampleSerializer.handleAnalogSamples(float[] samples) {
+				var l = hasTimeColumn ? String.Format(nfi, "{0:N9},", runningTimeOffset) : "";
+				runningTimeOffset += samplePeriod;
+				for(byte i = 0; i < samples.Length; i++) {
+					if(i > 0) l += ',';
+					l += samples[i];
+				}
+				sw.WriteLine(l);
+				numberOfSavedRecords++;
+			}
+
 			void ISampleSerializer.reopen() {
 				sw = new StreamWriter(saveFileName, true); // append
 			}
 
-			void ISampleSerializer.handleSample(byte sample) {
+			void ISampleSerializer.handleLogicalSample(byte sample) {
 				var l = hasTimeColumn ? String.Format(nfi, "{0:N9},", runningTimeOffset) : "";
 				runningTimeOffset += samplePeriod;
 				for(byte i = 0; i < 8; i++) {
@@ -89,8 +114,14 @@ namespace SmartScopeSave {
 			protected byte[] channelValues = new byte[8] {
 				0, 0, 0, 0, 0, 0, 0, 0
 			};
-			public static string[] channelChars = new string[8] {
+			public static string[] logicalChannelChars = new string[8] {
 				"!", "@", "#", "$", "%", "^", "&", "*"
+			};
+			protected float[] analogChannelValues = new float[2] {
+				0, 0
+			};
+			public static string[] analogChannelChars = new string[2] {
+				"(", ")"
 			};
 
 			string ISampleSerializer.getFileName() { return saveFileName; }
@@ -102,7 +133,7 @@ namespace SmartScopeSave {
 				sw = new StreamWriter(saveFileName);
 			}
 
-			void ISampleSerializer.prepareForSamples(double samplePeriod, double timeOffset, string[] meta) {
+			void ISampleSerializer.prepareForLogicalSamples(double samplePeriod, double timeOffset, string[] meta) {
 				this.samplePeriod = samplePeriod;
 				sampleInc = (UInt64)(samplePeriod * 1e8); // scale to 10 ns
 				this.timeOffset = timeOffset;
@@ -117,8 +148,8 @@ namespace SmartScopeSave {
 				sw.WriteLine("$end");
 				sw.WriteLine(String.Format("$timescale 10ns $end"));
 				sw.WriteLine("$scope module SmartScope $end");
-				for(int i = 0; i < channelChars.Length; i++)
-					sw.WriteLine(String.Format("$var wire 1 {0} D{1} $end", channelChars[i], i));
+				for(int i = 0; i < logicalChannelChars.Length; i++)
+					sw.WriteLine(String.Format("$var wire 1 {0} D{1} $end", logicalChannelChars[i], i));
 				sw.WriteLine("$upscope $end");
 				sw.WriteLine("$enddefinitions $end");
 
@@ -138,7 +169,7 @@ namespace SmartScopeSave {
 				return bits;
 			}
 
-			void ISampleSerializer.handleSample(byte sample) {
+			void ISampleSerializer.handleLogicalSample(byte sample) {
 				var l = "";
 				byte[] sampleValues = getBits(sample);
 
@@ -147,7 +178,7 @@ namespace SmartScopeSave {
 					// first data line
 					l = "#0";
 					for(byte i = 0; i < 8; i++) {
-						l += " " + sampleValues[i] + channelChars[i];
+						l += " " + sampleValues[i] + logicalChannelChars[i];
 						channelValues[i] = sampleValues[i]; // save new value
 					}
 					runningTimeOffset = 0;
@@ -160,8 +191,65 @@ namespace SmartScopeSave {
 						if(sampleValues[i] != channelValues[i]) {
 							if(l.Length == 0)
 								l = "#" + runningTimeOffset;
-							l += " " + sampleValues[i] + channelChars[i];
+							l += " " + sampleValues[i] + logicalChannelChars[i];
 							channelValues[i] = sampleValues[i]; // save new value
+						}
+					}
+
+				}
+
+				if(l.Length > 0) {
+					sw.WriteLine(l);
+					numberOfSavedRecords++;
+				}
+			}
+
+			void ISampleSerializer.prepareForAnalogSamples(double samplePeriod, double timeOffset, string[] meta) {
+				this.samplePeriod = samplePeriod;
+				sampleInc = (UInt64)(samplePeriod * 1e8); // scale to 10 ns
+				this.timeOffset = timeOffset;
+				runningTimeOffset = 0; // timeOffset;
+
+				// header
+				sw.WriteLine(String.Format("$date {0} $end", DateTime.Now.ToUniversalTime()));
+				sw.WriteLine("$comment");
+				sw.WriteLine("  SmartScopeSave:");
+				foreach(string ms in meta)
+					sw.WriteLine("    " + ms);
+				sw.WriteLine("$end");
+				sw.WriteLine(String.Format("$timescale 10ns $end"));
+				sw.WriteLine("$scope module SmartScope $end");
+				for(int i = 0; i < analogChannelChars.Length; i++)
+					sw.WriteLine(String.Format("$var wire 32 {0} A{1} $end", analogChannelChars[i], i));
+				sw.WriteLine("$upscope $end");
+				sw.WriteLine("$enddefinitions $end");
+
+				numberOfSavedRecords = 0;
+			}
+
+			void ISampleSerializer.handleAnalogSamples(float[] samples) {
+				var l = "";
+
+				if(!firstSampleSeen) {
+
+					// first data line
+					l = "#0";
+					for(byte i = 0; i < samples.Length; i++) {
+						l += " " + samples[i] + analogChannelChars[i];
+						analogChannelValues[i] = samples[i]; // save new value
+					}
+					runningTimeOffset = 0;
+					firstSampleSeen = true;
+
+				} else {
+
+					runningTimeOffset += sampleInc;
+					for(byte i = 0; i < samples.Length; i++) {
+						if(samples[i] != analogChannelValues[i]) {
+							if(l.Length == 0)
+								l = "#" + runningTimeOffset;
+							l += " r" + samples[i] + " " + analogChannelChars[i];
+							analogChannelValues[i] = samples[i]; // save new value
 						}
 					}
 

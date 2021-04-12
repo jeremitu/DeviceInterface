@@ -165,7 +165,7 @@ namespace SmartScopeSave
 			if (connected && dev is IScope && !(dev is DummyScope)) {
 				Logger.Info ("Device connected of type " + dev.GetType ().Name + " with serial " + dev.Serial);
 				scope = (IScope)dev;
-				ConfigureScope ();
+				acquirer.configure();
 			} else {
 				scope = null;
 			}
@@ -239,70 +239,236 @@ namespace SmartScopeSave
 		//static Serializers.ISampleSerializer sampleSerializer = new Serializers.CSVSerializer();
 		static Serializers.ISampleSerializer sampleSerializer = new Serializers.VCDSerializer();
 
+		public interface IAcquirer {
+			void configure();
+			void collectData(DataPackageScope p, DataSource s);
+		}
+		static IAcquirer acquirer = new LogicAcquirer();
 
-		static void ConfigureScope ()
-		{
-			Logger.Info ("Configuring scope");
+		public class AnalogAcquirer : IAcquirer {
+			public void configure() {
+				Logger.Info("Configuring scope");
+				//Stop the scope acquisition (commit setting to device)
+				scope.Running = false;
+				scope.CommitSettings();
 
-			//Stop the scope acquisition (commit setting to device)
-			scope.Running = false;
-			scope.CommitSettings ();
+				//Set handler for new incoming data
+				scope.DataSourceScope.OnNewDataAvailable += this.collectData;
+				//Start datasource
+				scope.DataSourceScope.Start();
 
-			//Set handler for new incoming data
-			scope.DataSourceScope.OnNewDataAvailable += CollectData;
-			//Start datasource
-			scope.DataSourceScope.Start ();
+				//Configure acquisition
 
-			//Configure acquisition
+				/******************************/
+				/* Horizontal / time settings */
+				/******************************/
+				//Disable logic analyser
+				scope.ChannelSacrificedForLogicAnalyser = null;
+				//Don't use rolling mode
+				scope.Rolling = false;
+				//Don't fetch overview buffer for faster transfers
+				scope.SendOverviewBuffer = false;
+				//trigger holdoff in seconds
+				scope.TriggerHoldOff = 0;
+				//Acquisition mode to automatic so we get data even when there's no trigger
+				scope.AcquisitionMode = AcquisitionMode.AUTO;
+				//Don't accept partial packages
+				scope.PreferPartial = false;
+				//Set viewport to match acquisition
+				scope.SetViewPort(0, scope.AcquisitionLength);
 
-			/******************************/
-			/* Horizontal / time settings */
-			/******************************/
-			//Disable logic analyser
-			scope.ChannelSacrificedForLogicAnalyser = AnalogChannel.ChB;
-			//Don't use rolling mode
-			scope.Rolling = false;
-			//Don't fetch overview buffer for faster transfers
-			scope.SendOverviewBuffer = false;
-			//trigger holdoff in seconds
-			scope.TriggerHoldOff = 0; 
-			//Acquisition mode to automatic so we get data even when there's no trigger
-			scope.AcquisitionMode = AcquisitionMode.SINGLE; 
-			//Don't accept partial packages
-			scope.PreferPartial = false;
-			//Set viewport to match acquisition
-			scope.SetViewPort (0, scope.AcquisitionLength);
+				scope.AcquisitionDepthUserMaximum = acquisitionDepth;
+				scope.AcquisitionDepth = acquisitionDepth;
+				scope.AcquisitionLength = acquisitionLength;
 
-			//Set sample depth to the minimum for a max datarate
-			//scope.AcquisitionLength = scope.AcquisitionLengthMin; 
+				/*******************************/
+				/* Vertical / voltage settings */
+				/*******************************/
+				foreach(AnalogChannel ch in AnalogChannel.List) {
+					//FIRST set vertical range
+					scope.SetVerticalRange(ch, -5, 5);
+					//THEN set vertical offset (dicated by range)
+					scope.SetYOffset(ch, 0);
+					//use DC coupling
+					scope.SetCoupling(ch, Coupling.DC);
+					//and x10 probes
+					ch.SetProbe(Probe.DefaultX10Probe);
+				}
 
-			//Console.WriteLine("Setting AcquisitionDepth to " + acquisitionDepth);
-			scope.AcquisitionDepthUserMaximum = acquisitionDepth;
-			scope.AcquisitionDepth = acquisitionDepth;
-			//Console.WriteLine("Setting AcquisitionLength to " + acquisitionLength);
-			scope.AcquisitionLength = acquisitionLength;
+				// Set trigger to channel A
+				scope.TriggerValue = new TriggerValue() {
+					channel = AnalogChannel.ChA,
+					edge = TriggerEdge.RISING,
+					level = 1.0f
+				};
 
-			// Digital trigger 
-			System.Collections.Generic.Dictionary<DigitalChannel, DigitalTriggerValue> digitalTriggers = scope.TriggerValue.Digital;
-			digitalTriggers[digitalTriggerChannel] = digitalTriggerValue;
-			scope.TriggerValue = new TriggerValue() {
-				mode = TriggerMode.Digital,
-				source = TriggerSource.Channel,
-				channel = null,
-				Digital = digitalTriggers
-			};
+				//Update the scope with the current settings
+				scope.CommitSettings();
 
-			//Update the scope with the current settings
-			scope.CommitSettings ();
+				//Show user what he did
+				PrintScopeConfiguration();
 
-			//Show user what he did
-			PrintScopeConfiguration ();
+				sampleSerializer.initialize();
 
-			sampleSerializer.initialize();
+				//Set scope running;
+				scope.Running = true;
+				scope.CommitSettings();
+			}
 
-			//Set scope runnign;
-			scope.Running = true;
-			scope.CommitSettings ();
+			public void collectData(DataPackageScope p, DataSource s) {
+				int triesLeft = 20;
+				while(triesLeft >= 0) {
+					DataPackageScope dps = scope.GetScopeData();
+
+					if(dps == null) {
+						triesLeft--;
+						continue;
+					}
+
+					if(dps.FullAcquisitionFetchProgress < 1f) {
+						continue;
+					}
+
+					if(dps.GetData(ChannelDataSourceScope.Acquisition, AnalogChannel.List[0]) == null) {
+						Console.Write("Timeout while waiting for scope data.\n");
+						running = false;
+						return;
+					}
+
+					ChannelData cd = dps.GetData(ChannelDataSourceScope.Acquisition, AnalogChannel.List[0]); // [0] for channel A
+					float[] va = (float[])cd.array;
+					cd = dps.GetData(ChannelDataSourceScope.Acquisition, AnalogChannel.List[1]); // [1] for channel B
+					float[] vb = (float[])cd.array;
+
+					sampleSerializer.prepareForAnalogSamples(cd.samplePeriod, cd.timeOffset, getScopeMetaStrings());
+
+					/*if(dps.GetData(ChannelDataSourceScope.Acquisition, AnalogChannel.ChB.Raw()) != null) {
+						ChannelData cd = dps.GetData(ChannelDataSourceScope.Acquisition, AnalogChannelRaw.List[1]); // [1] for channel B
+						byte[] ba = (byte[])cd.array;
+						sampleSerializer.prepareForLogicalSamples(cd.samplePeriod, cd.timeOffset, getScopeMetaStrings());
+						foreach(byte b in ba) {
+							sampleSerializer.handleLogicalSample(b);
+						}
+						sampleSerializer.finalize();
+
+						Console.Write(String.Format("Saved {0} samples using {1} records into file \"{2}\"\n",
+							ba.Length, sampleSerializer.getNumberOfSavedRecords(), sampleSerializer.getFileName()));
+
+						if(optInteractive) {
+							printScopeAcqConfig();
+							//Console.Write("'R':replace, 'A':add, '[]':prev/next AcqDepth, 'Q|X|Esc' to Quit\n");
+							Console.Write("'[Enter|R]':repeat, '[]':prev/next AcqDepth, '<>':prev/next AcqLength, 'Q|X|Esc' to Quit\n");
+						} else
+							running = false;
+
+						return;
+					}*/
+				}
+				Console.Write("Timeout while waiting for scope data.\n");
+				running = false;
+			}
+		}
+
+		public class LogicAcquirer : IAcquirer {
+			public void configure() {
+				Logger.Info("Configuring scope");
+
+				//Stop the scope acquisition (commit setting to device)
+				scope.Running = false;
+				scope.CommitSettings();
+
+				//Set handler for new incoming data
+				scope.DataSourceScope.OnNewDataAvailable += this.collectData;
+				//Start datasource
+				scope.DataSourceScope.Start();
+
+				//Configure acquisition
+
+				/******************************/
+				/* Horizontal / time settings */
+				/******************************/
+				//Disable logic analyser
+				scope.ChannelSacrificedForLogicAnalyser = AnalogChannel.ChB;
+				//Don't use rolling mode
+				scope.Rolling = false;
+				//Don't fetch overview buffer for faster transfers
+				scope.SendOverviewBuffer = false;
+				//trigger holdoff in seconds
+				scope.TriggerHoldOff = 0;
+				//Acquisition mode to automatic so we get data even when there's no trigger
+				scope.AcquisitionMode = AcquisitionMode.SINGLE;
+				//Don't accept partial packages
+				scope.PreferPartial = false;
+				//Set viewport to match acquisition
+				scope.SetViewPort(0, scope.AcquisitionLength);
+
+				scope.AcquisitionDepthUserMaximum = acquisitionDepth;
+				scope.AcquisitionDepth = acquisitionDepth;
+				scope.AcquisitionLength = acquisitionLength;
+
+				// Digital trigger 
+				System.Collections.Generic.Dictionary<DigitalChannel, DigitalTriggerValue> digitalTriggers = scope.TriggerValue.Digital;
+				digitalTriggers[digitalTriggerChannel] = digitalTriggerValue;
+				scope.TriggerValue = new TriggerValue() {
+					mode = TriggerMode.Digital,
+					source = TriggerSource.Channel,
+					channel = null,
+					Digital = digitalTriggers
+				};
+
+				//Update the scope with the current settings
+				scope.CommitSettings();
+
+				//Show user what he did
+				PrintScopeConfiguration();
+
+				sampleSerializer.initialize();
+
+				//Set scope runnign;
+				scope.Running = true;
+				scope.CommitSettings();
+			}
+
+			public void collectData(DataPackageScope p, DataSource s) {
+				int triesLeft = 20;
+				while(triesLeft >= 0) {
+					DataPackageScope dps = scope.GetScopeData();
+
+					if(dps == null) {
+						triesLeft--;
+						continue;
+					}
+
+					if(dps.FullAcquisitionFetchProgress < 1f) {
+						continue;
+					}
+
+					if(dps.GetData(ChannelDataSourceScope.Acquisition, AnalogChannel.ChB.Raw()) != null) {
+						ChannelData cd = dps.GetData(ChannelDataSourceScope.Acquisition, AnalogChannelRaw.List[1]); // [1] for channel B
+						byte[] ba = (byte[])cd.array;
+						sampleSerializer.prepareForLogicalSamples(cd.samplePeriod, cd.timeOffset, getScopeMetaStrings());
+						foreach(byte b in ba) {
+							sampleSerializer.handleLogicalSample(b);
+						}
+						sampleSerializer.finalize();
+
+						Console.Write(String.Format("Saved {0} samples using {1} records into file \"{2}\"\n",
+							ba.Length, sampleSerializer.getNumberOfSavedRecords(), sampleSerializer.getFileName()));
+
+						if(optInteractive) {
+							printScopeAcqConfig();
+							//Console.Write("'R':replace, 'A':add, '[]':prev/next AcqDepth, 'Q|X|Esc' to Quit\n");
+							Console.Write("'[Enter|R]':repeat, '[]':prev/next AcqDepth, '<>':prev/next AcqLength, 'Q|X|Esc' to Quit\n");
+						} else
+							running = false;
+
+						return;
+					}
+				}
+				Console.Write("Timeout while waiting for scope data.\n");
+				running = false;
+			}
+
 		}
 
 		static string[] getScopeMetaStrings() {
@@ -318,49 +484,6 @@ namespace SmartScopeSave
 							Utils.siPrint(scope.AcquisitionDepth, 1, 3, "Sa", 1024),
 							Utils.siPrint(scope.AcquisitionLength, 1e-9, 3, "s"),
 							Utils.siPrint(1.0 / scope.SamplePeriod, 1, 3, "Hz")));
-		}
-
-		/// <summary>
-		/// Print 
-		/// </summary>
-		static void CollectData(DataPackageScope p, DataSource s) {
-			int triesLeft = 20;
-			while(triesLeft >= 0) {
-				DataPackageScope dps = scope.GetScopeData();
-
-				if(dps == null) {
-					triesLeft--;
-					continue;
-				}
-
-				if(dps.FullAcquisitionFetchProgress < 1f) {
-					continue;
-				}
-
-				if(dps.GetData(ChannelDataSourceScope.Acquisition, AnalogChannel.ChB.Raw()) != null) {
-					ChannelData cd = dps.GetData(ChannelDataSourceScope.Acquisition, AnalogChannelRaw.List[1]); // [1] for channel B
-					byte[] ba = (byte[])cd.array;
-					sampleSerializer.prepareForSamples(cd.samplePeriod, cd.timeOffset, getScopeMetaStrings());
-					foreach(byte b in ba) {
-						sampleSerializer.handleSample(b);
-					}
-					sampleSerializer.finalize();
-
-					Console.Write(String.Format("Saved {0} samples using {1} records into file \"{2}\"\n",
-						ba.Length, sampleSerializer.getNumberOfSavedRecords(), sampleSerializer.getFileName()));
-
-					if(optInteractive) {
-						printScopeAcqConfig();
-						//Console.Write("'R':replace, 'A':add, '[]':prev/next AcqDepth, 'Q|X|Esc' to Quit\n");
-						Console.Write("'[Enter|R]':repeat, '[]':prev/next AcqDepth, '<>':prev/next AcqLength, 'Q|X|Esc' to Quit\n");
-					} else
-						running = false;
-
-					return;
-				}
-			}
-			Console.Write("Timeout while waiting for scope data.\n");
-			running = false;
 		}
 
 		static void PrintScopeConfiguration ()
@@ -385,16 +508,20 @@ namespace SmartScopeSave
 			c += String.Format (f, "Logic Analyser", scope.LogicAnalyserEnabled.YesNo ());
 
 
-			/*string fCh = "Channel {0:s} - {1,-15:s}: {2:s}\n";
+			string fCh = "Channel {0:s} - {1,-15:s}: {2:s}\n";
 			foreach (AnalogChannel ch in AnalogChannel.List) {
 				string chName = ch.Name;
 				c += String.Format ("======= Channel {0:s} =======\n", chName);
 				c += String.Format (fCh, chName, "Vertical offset", printVolt (scope.GetYOffset (ch)));
 				c += String.Format (fCh, chName, "Coupling", scope.GetCoupling (ch).ToString ("G"));
 				c += String.Format (fCh, chName, "Probe division", ch.Probe.ToString ());
-			}*/
+			}
 			c += "---------------------------------------------\n";
 			Console.Write (c);				
+		}
+
+		static string printVolt(float v) {
+			return Utils.siPrint(v, 0.013, 3, "V");
 		}
 
 		static DigitalChannel parseDigitalChannel(string dc) {
