@@ -1,17 +1,21 @@
 # SmartScopeSave
 
-A copy of SmartScopeConsole and modified so it can save data to be imported in Sigrok.
+A copy of SmartScopeConsole and modified so it can save data. For example to be imported in Sigrok.
 
 Two file formats are supported: Value Change Dump (VCD) and Comma Seperated Values (CSV).
 
-It collects digital signals using the B-channel and saves them into a VCD file (called "smartscope.vcd").
-Trigger is set to 'L' on channel 'D0' and mode is set to 'Single'.
+Data can be collected in two modes:
+
+  * Analog, collect analog signals from both the analog channels.
+  * Digital, collect digital signals from the eight digital inputs.
 
 
 Command line options:
 
 ```
 Usage:
+  --analog              : perform acquisition of the two analog channels
+  --digital             : perform acquisition of the eight digital channels
   --csv                 : save in Comma Seperated Values file (CSV) format
   --vcd                 : save in Value Change Dump (VCD) format
    -i
@@ -20,6 +24,7 @@ Usage:
   --non-interactive     : exit after acquisition
   --acq-depth <depth>   : acquisition depth
   --acq-length <length> : acquisition length
+  --trigger <param>     : trigger channel [0..7] & value [LHFR], example: D1:L
   --file-name <name>    : file name
   --enable-log          : enable log and print it
    -h
@@ -27,6 +32,10 @@ Usage:
 ```
 
 Defaults: vcd(smartscope.vcd), non-interactive, 1M, 0.2s
+
+Analog trigger is set to 'Falling Edge' on channel 'A' and mode is set to 'Single'.
+
+Digital trigger is set to 'L' on channel 'D0' and mode is set to 'Single'.
 
 ### Interactive mode
 
