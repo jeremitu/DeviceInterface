@@ -123,6 +123,7 @@ namespace SmartScopeSave {
 			public static string[] analogChannelChars = new string[2] {
 				"(", ")"
 			};
+			NumberFormatInfo nfi = new CultureInfo("en-US", false).NumberFormat;
 
 			string ISampleSerializer.getFileName() { return saveFileName; }
 			void ISampleSerializer.setFileName(string fileName) { saveFileName = fileName; }
@@ -220,7 +221,7 @@ namespace SmartScopeSave {
 				sw.WriteLine(String.Format("$timescale 10ns $end"));
 				sw.WriteLine("$scope module SmartScope $end");
 				for(int i = 0; i < analogChannelChars.Length; i++)
-					sw.WriteLine(String.Format("$var wire 32 {0} A{1} $end", analogChannelChars[i], i));
+					sw.WriteLine(String.Format("$var real 64 {0} A{1} $end", analogChannelChars[i], i));
 				sw.WriteLine("$upscope $end");
 				sw.WriteLine("$enddefinitions $end");
 
@@ -235,7 +236,7 @@ namespace SmartScopeSave {
 					// first data line
 					l = "#0";
 					for(byte i = 0; i < samples.Length; i++) {
-						l += " " + samples[i] + analogChannelChars[i];
+						l += " r" + String.Format(nfi, "{0:N9}", samples[i]) + " " + analogChannelChars[i];
 						analogChannelValues[i] = samples[i]; // save new value
 					}
 					runningTimeOffset = 0;
@@ -248,7 +249,7 @@ namespace SmartScopeSave {
 						if(samples[i] != analogChannelValues[i]) {
 							if(l.Length == 0)
 								l = "#" + runningTimeOffset;
-							l += " r" + samples[i] + " " + analogChannelChars[i];
+							l += " r" + String.Format(nfi, "{0:N9}", samples[i]) + " " + analogChannelChars[i];
 							analogChannelValues[i] = samples[i]; // save new value
 						}
 					}

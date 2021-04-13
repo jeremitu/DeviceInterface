@@ -51,6 +51,14 @@ namespace SmartScopeSave
 		{
 			for(int i=0;i<args.Length;i++) {
 				switch(args[i]) {
+
+					case "--analog":
+						acquirer = new AnalogAcquirer();
+						break;
+					case "--digital":
+						acquirer = new DigitalAcquirer();
+						break;
+
 					case "-i":
 					case "--interactive":
 						optInteractive = true;
@@ -142,6 +150,8 @@ namespace SmartScopeSave
 
 		static void printHelp() {
 			Console.WriteLine("Usage:");
+			Console.WriteLine("  --analog              : perform acquisition of the two analog channels");
+			Console.WriteLine("  --digital             : perform acquisition of the eight digital channels");
 			Console.WriteLine("  --csv                 : save in Comma Seperated Values file (CSV) format");
 			Console.WriteLine("  --vcd                 : save in Value Change Dump (VCD) format");
 			Console.WriteLine("   -i");
@@ -243,7 +253,7 @@ namespace SmartScopeSave
 			void configure();
 			void collectData(DataPackageScope p, DataSource s);
 		}
-		static IAcquirer acquirer = new LogicAcquirer();
+		static IAcquirer acquirer = new DigitalAcquirer();
 
 		public class AnalogAcquirer : IAcquirer {
 			public void configure() {
@@ -268,25 +278,28 @@ namespace SmartScopeSave
 				scope.Rolling = false;
 				//Don't fetch overview buffer for faster transfers
 				scope.SendOverviewBuffer = false;
+			  //Set sample depth to the minimum for a max datarate
+			  //scope.AcquisitionLength = scope.AcquisitionLengthMin; 
 				//trigger holdoff in seconds
 				scope.TriggerHoldOff = 0;
-				//Acquisition mode to automatic so we get data even when there's no trigger
-				scope.AcquisitionMode = AcquisitionMode.AUTO;
+				//Acquisition mode to Single since it does not work otherwise (wait for ever)
+				scope.AcquisitionMode = AcquisitionMode.SINGLE; //AUTO;
 				//Don't accept partial packages
 				scope.PreferPartial = false;
 				//Set viewport to match acquisition
-				scope.SetViewPort(0, scope.AcquisitionLength);
+				//scope.SetViewPort(0, scope.AcquisitionLength);
 
 				scope.AcquisitionDepthUserMaximum = acquisitionDepth;
 				scope.AcquisitionDepth = acquisitionDepth;
 				scope.AcquisitionLength = acquisitionLength;
+				//scope.SetViewPort(0, scope.AcquisitionLength);
 
 				/*******************************/
 				/* Vertical / voltage settings */
 				/*******************************/
 				foreach(AnalogChannel ch in AnalogChannel.List) {
 					//FIRST set vertical range
-					scope.SetVerticalRange(ch, -5, 5);
+					scope.SetVerticalRange(ch, -3, 3);
 					//THEN set vertical offset (dicated by range)
 					scope.SetYOffset(ch, 0);
 					//use DC coupling
@@ -297,8 +310,10 @@ namespace SmartScopeSave
 
 				// Set trigger to channel A
 				scope.TriggerValue = new TriggerValue() {
+					source = TriggerSource.Channel,
 					channel = AnalogChannel.ChA,
-					edge = TriggerEdge.RISING,
+					mode = TriggerMode.Edge,
+					edge = TriggerEdge.FALLING,
 					level = 1.0f
 				};
 
@@ -314,7 +329,7 @@ namespace SmartScopeSave
 				scope.Running = true;
 				scope.CommitSettings();
 			}
-
+			int c;
 			public void collectData(DataPackageScope p, DataSource s) {
 				int triesLeft = 20;
 				while(triesLeft >= 0) {
@@ -340,36 +355,29 @@ namespace SmartScopeSave
 					cd = dps.GetData(ChannelDataSourceScope.Acquisition, AnalogChannel.List[1]); // [1] for channel B
 					float[] vb = (float[])cd.array;
 
+					float[] samples = new float[2];
 					sampleSerializer.prepareForAnalogSamples(cd.samplePeriod, cd.timeOffset, getScopeMetaStrings());
+					for(int i = 0; i < va.Length; i++) {
+						samples[0] = va[i];
+						samples[1] = vb[i];
+						sampleSerializer.handleAnalogSamples(samples);
+					}
+					sampleSerializer.finalize();
 
-					/*if(dps.GetData(ChannelDataSourceScope.Acquisition, AnalogChannel.ChB.Raw()) != null) {
-						ChannelData cd = dps.GetData(ChannelDataSourceScope.Acquisition, AnalogChannelRaw.List[1]); // [1] for channel B
-						byte[] ba = (byte[])cd.array;
-						sampleSerializer.prepareForLogicalSamples(cd.samplePeriod, cd.timeOffset, getScopeMetaStrings());
-						foreach(byte b in ba) {
-							sampleSerializer.handleLogicalSample(b);
-						}
-						sampleSerializer.finalize();
+					Console.Write(String.Format("Saved {0} samples using {1} records into file \"{2}\"\n",
+						va.Length, sampleSerializer.getNumberOfSavedRecords(), sampleSerializer.getFileName()));
 
-						Console.Write(String.Format("Saved {0} samples using {1} records into file \"{2}\"\n",
-							ba.Length, sampleSerializer.getNumberOfSavedRecords(), sampleSerializer.getFileName()));
-
-						if(optInteractive) {
-							printScopeAcqConfig();
-							//Console.Write("'R':replace, 'A':add, '[]':prev/next AcqDepth, 'Q|X|Esc' to Quit\n");
-							Console.Write("'[Enter|R]':repeat, '[]':prev/next AcqDepth, '<>':prev/next AcqLength, 'Q|X|Esc' to Quit\n");
-						} else
-							running = false;
-
-						return;
-					}*/
+					if(optInteractive) {
+						printScopeAcqConfig();
+						Console.Write("'[Enter|R]':repeat, '[]':prev/next AcqDepth, '<>':prev/next AcqLength, 'Q|X|Esc' to Quit\n");
+					} else
+						running = false;
+					return;
 				}
-				Console.Write("Timeout while waiting for scope data.\n");
-				running = false;
 			}
 		}
 
-		public class LogicAcquirer : IAcquirer {
+		public class DigitalAcquirer : IAcquirer {
 			public void configure() {
 				Logger.Info("Configuring scope");
 
@@ -395,7 +403,7 @@ namespace SmartScopeSave
 				scope.SendOverviewBuffer = false;
 				//trigger holdoff in seconds
 				scope.TriggerHoldOff = 0;
-				//Acquisition mode to automatic so we get data even when there's no trigger
+				//Acquisition mode to Single since it does not work otherwise (wait for ever)
 				scope.AcquisitionMode = AcquisitionMode.SINGLE;
 				//Don't accept partial packages
 				scope.PreferPartial = false;
@@ -500,8 +508,8 @@ namespace SmartScopeSave
 			c += String.Format (f, "Viewport offset", Utils.siPrint (scope.ViewPortOffset, 1e-9, 3, "s"));
 			c += String.Format (f, "Viewport timespan", Utils.siPrint (scope.ViewPortTimeSpan, 1e-9, 3, "s"));	
 			c += String.Format (f, "Trigger holdoff", Utils.siPrint (scope.TriggerHoldOff, 1e-9, 3, "s"));
-			c += String.Format (f, "Trigger channel", digitalTriggerChannel);
-			c += String.Format (f, "Trigger value", digitalTriggerValue);
+			c += String.Format (f, "Trigger channel", scope.TriggerValue.channel);
+			//c += String.Format (f, "Trigger value", digitalTriggerValue); Exception!
 			c += String.Format (f, "Acquisition mode", scope.AcquisitionMode.ToString ("G"));
 			c += String.Format (f, "Rolling", scope.Rolling.YesNo ());
 			c += String.Format (f, "Partial", scope.PreferPartial.YesNo ());
