@@ -43,8 +43,25 @@ namespace SmartScopeSave
 		static double acquisitionLength = AcqLengthData[acqLengthIndex];
 
 		static bool optInteractive = false;
+
+		static double triggerHoldOff = 0;
+
+		// for Digital acquisition
 		static DigitalTriggerValue digitalTriggerValue = DigitalTriggerValue.L;
 		static DigitalChannel digitalTriggerChannel = DigitalChannel.Digi1;
+
+		// for Analog acquisition
+		static Coupling coupling = Coupling.DC;
+		static TriggerEdge triggerEdge = TriggerEdge.FALLING;
+		static TriggerMode triggerMode = TriggerMode.Edge;
+		static float triggerLevel = 1.0f;
+		static float yOffset = 0;
+		static float verticalRangeMin = -3;
+		static float verticalRangeMax = 3;
+		static Probe probe = Probe.DefaultX10Probe;
+
+		// ToDo
+		//   allow no trigger and use scope.ForceTrigger();
 
 		[STAThread]
 		static void Main (string[] args)
@@ -93,13 +110,67 @@ namespace SmartScopeSave
 						}
 						break;
 
-					case "--trigger":
+					case "--dig-trigger":
 						try {
 							string[] triggerParam = args[++i].Split(':');
 							digitalTriggerChannel = parseDigitalChannel(triggerParam[0]);
 							digitalTriggerValue = (DigitalTriggerValue)Enum.Parse(typeof(DigitalTriggerValue), triggerParam[1]);
 						} catch(Exception) {
 							Console.WriteLine($"Unable to parse channel and value from trigger param '{args[i]}'");
+						}
+						break;
+
+					case "--ac-coupling":
+						coupling = Coupling.AC;
+						break;
+					case "--dc-coupling":
+						coupling = Coupling.DC;
+						break;
+
+					case "--probe-10x":
+						probe = Probe.DefaultX10Probe;
+						break;
+					case "--probe-1x":
+						probe = Probe.DefaultX1Probe;
+						break;
+
+					case "--trigger-edge":
+						switch(args[++i].ToLower()) {
+							case "falling":
+								triggerEdge = TriggerEdge.FALLING;
+								break;
+							case "rising":
+								triggerEdge = TriggerEdge.RISING;
+								break;
+							case "any":
+								triggerEdge = TriggerEdge.ANY;
+								break;
+							default:
+								Console.WriteLine($"Unknown trigger-edge '{args[i]}'");
+								break;
+						}
+						break;
+
+					case "--range-min":
+						try {
+							verticalRangeMin = (float)Double.Parse(args[++i]);
+						} catch(FormatException) {
+							Console.WriteLine($"Unable to parse vertical range min level '{args[i]}'");
+						}
+						break;
+					case "--range-max":
+						try {
+							verticalRangeMax = (float)Double.Parse(args[++i]);
+						} catch(FormatException) {
+							Console.WriteLine($"Unable to parse vertical range max level '{args[i]}'");
+						}
+						break;
+
+					case "--trigger-level":
+						try {
+							triggerLevel = (float)Double.Parse(args[++i]);
+						} catch(FormatException) {
+							Console.WriteLine($"Unable to parse trigger level '{args[i]}'");
 						}
 						break;
 
@@ -150,21 +221,29 @@ namespace SmartScopeSave
 
 		static void printHelp() {
 			Console.WriteLine("Usage:");
-			Console.WriteLine("  --analog              : perform acquisition of the two analog channels");
-			Console.WriteLine("  --digital             : perform acquisition of the eight digital channels");
-			Console.WriteLine("  --csv                 : save in Comma Seperated Values file (CSV) format");
-			Console.WriteLine("  --vcd                 : save in Value Change Dump (VCD) format");
+			Console.WriteLine("  --analog                : perform acquisition of the two analog channels");
+			Console.WriteLine("  --digital               : perform acquisition of the eight digital channels");
+			Console.WriteLine("  --csv                   : save in Comma Separated Values file (CSV) format");
+			Console.WriteLine("  --vcd                   : save in Value Change Dump (VCD) format");
 			Console.WriteLine("   -i");
-			Console.WriteLine("  --interactive         : keep running after acquisition and allow to start another one");
+			Console.WriteLine("  --interactive           : keep running after acquisition and allow to start another one");
 			Console.WriteLine("   -n");
-			Console.WriteLine("  --non-interactive     : exit after acquisition");
-			Console.WriteLine("  --acq-depth <depth>   : acquisition depth");
-			Console.WriteLine("  --acq-length <length> : acquisition length");
-			Console.WriteLine("  --trigger <param>     : trigger channel [0..7] & value [LHFR], example: D1:L");
-			Console.WriteLine("  --file-name <name>    : file name");
-			Console.WriteLine("  --enable-log          : enable log and print it");
+			Console.WriteLine("  --non-interactive       : exit after acquisition");
+			Console.WriteLine("  --acq-depth <depth>     : acquisition depth");
+			Console.WriteLine("  --acq-length <length>   : acquisition length");
+			Console.WriteLine("  --dig-trigger <param>   : digital trigger channel [0..7] & value [LHFR], example: D1:L");
+			Console.WriteLine("  --ac-coupling           : AC coupling");
+			Console.WriteLine("  --dc-coupling           : DC coupling");
+			Console.WriteLine("  --probe-10x             : using a 10x probe");
+			Console.WriteLine("  --probe-1x              : using a 1x probe");
+			Console.WriteLine("  --file-name <name>      : file name");
+			Console.WriteLine("  --trigger-edge <param>  : analog acquisition trigger edge: [any|falling|rising]");
+			Console.WriteLine("  --trigger-level <level> : analog acquisition trigger level");
+			Console.WriteLine("  --range-min <range>     : analog acquisition minimum range");
+			Console.WriteLine("  --range-max <range>     : analog acquisition maximum range");
+			Console.WriteLine("  --enable-log            : enable log and print it");
 			Console.WriteLine("   -h");
-			Console.WriteLine("  --help                : show this message");
+			Console.WriteLine("  --help                  : show this message");
 			Console.WriteLine($"Defaults: vcd({sampleSerializer.getFileName()}), non-interactive, 1M, 0.2s, trigger: 1L");
 		}
 
@@ -278,10 +357,10 @@ namespace SmartScopeSave
 				scope.Rolling = false;
 				//Don't fetch overview buffer for faster transfers
 				scope.SendOverviewBuffer = false;
-			  //Set sample depth to the minimum for a max datarate
-			  //scope.AcquisitionLength = scope.AcquisitionLengthMin; 
+				//Set sample depth to the minimum for a max datarate
+				//scope.AcquisitionLength = scope.AcquisitionLengthMin; 
 				//trigger holdoff in seconds
-				scope.TriggerHoldOff = 0;
+				scope.TriggerHoldOff = triggerHoldOff;
 				//Acquisition mode to Single since it does not work otherwise (wait for ever)
 				scope.AcquisitionMode = AcquisitionMode.SINGLE; //AUTO;
 				//Don't accept partial packages
@@ -299,22 +378,20 @@ namespace SmartScopeSave
 				/*******************************/
 				foreach(AnalogChannel ch in AnalogChannel.List) {
 					//FIRST set vertical range
-					scope.SetVerticalRange(ch, -3, 3);
+					scope.SetVerticalRange(ch, verticalRangeMin, verticalRangeMax);
 					//THEN set vertical offset (dicated by range)
-					scope.SetYOffset(ch, 0);
-					//use DC coupling
-					scope.SetCoupling(ch, Coupling.DC);
-					//and x10 probes
-					ch.SetProbe(Probe.DefaultX10Probe);
+					scope.SetYOffset(ch, yOffset);
+					scope.SetCoupling(ch, coupling);
+					ch.SetProbe(probe);
 				}
 
 				// Set trigger to channel A
 				scope.TriggerValue = new TriggerValue() {
 					source = TriggerSource.Channel,
 					channel = AnalogChannel.ChA,
-					mode = TriggerMode.Edge,
-					edge = TriggerEdge.FALLING,
-					level = 1.0f
+					mode = triggerMode,
+					edge = triggerEdge,
+					level = triggerLevel
 				};
 
 				//Update the scope with the current settings
@@ -329,7 +406,7 @@ namespace SmartScopeSave
 				scope.Running = true;
 				scope.CommitSettings();
 			}
-			int c;
+
 			public void collectData(DataPackageScope p, DataSource s) {
 				int triesLeft = 20;
 				while(triesLeft >= 0) {
