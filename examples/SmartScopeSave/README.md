@@ -31,6 +31,7 @@ Usage:
   --probe-1x              : using a 1x probe
   --file-name <name>      : file name
   --trigger-edge <param>  : analog acquisition trigger edge: [any|falling|rising]
+  --trigger-mode <param>  : analog acquisition trigger mode: [auto|single]
   --trigger-level <level> : analog acquisition trigger level
   --range-min <range>     : analog acquisition minimum range
   --range-max <range>     : analog acquisition maximum range
@@ -44,6 +45,12 @@ Defaults: vcd(smartscope.vcd), non-interactive, 1M, 0.2s
 Analog: trigger is set to 'Falling Edge' on channel 'A' and mode is set to 'Single', trigger level to 1.0. Coupling to DC, range to [-3, 3], probe is 10X.
 
 Digital: trigger is set to 'L' on channel 'D0' and mode is set to 'Single'.
+
+#### Notes
+
+  * Analog acquisition can also be done without a trigger using `--trigger-mode auto`.
+  * Digital acquisition always needs a trigger (without it it waits forever).
+
 
 ### Interactive mode
 
@@ -61,9 +68,12 @@ Selectable Acquisition Depth: 4M 2M 1M 512K 256K 128K
 
 Selectable Acquisition Length (s): 0.000001, 0.000002, 0.000005 ... 0.5, 1, 2
 
+A new aquisition recreates the file (new data is *not* append).
+
 ### ToDo
 - test analog csv data 
-- more command line options: y offset, trigger holdoff, trigger modes (timeout, pulse, external(?))
-- allow acquisition without a trigger
-- allow mixed mode (1 analog channel + 8 digital channels)
+- test interactive mode
+- more command line options: y offset, trigger holdoff, trigger methods (timeout, pulse, external(?))
+- allow digital acquisition without a trigger
+- add mixed mode acquisition (1 analog channel + 8 digital channels)
 
