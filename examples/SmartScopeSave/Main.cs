@@ -45,6 +45,7 @@ namespace SmartScopeSave
 		static bool optInteractive = false;
 
 		static double triggerHoldOff = 0;
+		static AcquisitionMode acquisitionMode = AcquisitionMode.SINGLE;// AUTO;
 
 		// for Digital acquisition
 		static DigitalTriggerValue digitalTriggerValue = DigitalTriggerValue.L;
@@ -146,7 +147,24 @@ namespace SmartScopeSave
 								triggerEdge = TriggerEdge.ANY;
 								break;
 							default:
-								Console.WriteLine($"Unknown trigger-edge '{args[i]}'");
+								Console.WriteLine($"Unknown trigger edge '{args[i]}'");
+								break;
+						}
+						break;
+
+					case "--trigger-mode":
+						switch(args[++i].ToLower()) {
+							case "auto":
+								acquisitionMode = AcquisitionMode.AUTO;
+								break;
+							case "normal":
+						  	acquisitionMode = AcquisitionMode.NORMAL;
+								break;
+							case "single":
+								acquisitionMode = AcquisitionMode.SINGLE;
+								break;
+							default:
+								Console.WriteLine($"Unknown trigger mode '{args[i]}'");
 								break;
 						}
 						break;
@@ -238,6 +256,7 @@ namespace SmartScopeSave
 			Console.WriteLine("  --probe-1x              : using a 1x probe");
 			Console.WriteLine("  --file-name <name>      : file name");
 			Console.WriteLine("  --trigger-edge <param>  : analog acquisition trigger edge: [any|falling|rising]");
+			//Console.WriteLine("  --trigger-mode <param>  : analog acquisition trigger mode: [auto|single]");
 			Console.WriteLine("  --trigger-level <level> : analog acquisition trigger level");
 			Console.WriteLine("  --range-min <range>     : analog acquisition minimum range");
 			Console.WriteLine("  --range-max <range>     : analog acquisition maximum range");
@@ -362,16 +381,14 @@ namespace SmartScopeSave
 				//trigger holdoff in seconds
 				scope.TriggerHoldOff = triggerHoldOff;
 				//Acquisition mode to Single since it does not work otherwise (wait for ever)
-				scope.AcquisitionMode = AcquisitionMode.SINGLE; //AUTO;
+				scope.AcquisitionMode = acquisitionMode;
 				//Don't accept partial packages
 				scope.PreferPartial = false;
-				//Set viewport to match acquisition
-				//scope.SetViewPort(0, scope.AcquisitionLength);
 
 				scope.AcquisitionDepthUserMaximum = acquisitionDepth;
 				scope.AcquisitionDepth = acquisitionDepth;
 				scope.AcquisitionLength = acquisitionLength;
-				//scope.SetViewPort(0, scope.AcquisitionLength);
+				//scope.SetViewPort(0, scope.AcquisitionLength); // has an internal max
 
 				/*******************************/
 				/* Vertical / voltage settings */
@@ -405,6 +422,15 @@ namespace SmartScopeSave
 				//Set scope running;
 				scope.Running = true;
 				scope.CommitSettings();
+
+				if(scope.AcquisitionMode == AcquisitionMode.AUTO) {
+					//System.Threading.Thread.Sleep(100);
+					//scope.ForceTrigger();
+					//((SmartScope)scope).StrobeMemory[LabNation.DeviceInterface.Hardware.STR.ACQ_START].WriteImmediate(true);
+					//((SmartScope)scope).StrobeMemory[LabNation.DeviceInterface.Hardware.STR.FORCE_TRIGGER].WriteImmediate(true);
+					//FetchLastFrame(scope);
+				} else
+					Console.Write("Waiting for trigger\n");
 			}
 
 			public void collectData(DataPackageScope p, DataSource s) {
@@ -512,6 +538,8 @@ namespace SmartScopeSave
 				//Set scope runnign;
 				scope.Running = true;
 				scope.CommitSettings();
+
+				Console.Write("Waiting for trigger\n");
 			}
 
 			public void collectData(DataPackageScope p, DataSource s) {
@@ -582,25 +610,28 @@ namespace SmartScopeSave
 			c += String.Format (f, "Acquisition depth", Utils.siPrint (scope.AcquisitionDepth, 1, 3, "Sa", 1024));
 			c += String.Format (f, "Acquisition length", Utils.siPrint (scope.AcquisitionLength, 1e-9, 3, "s"));
 			c += String.Format (f, "Sample rate", Utils.siPrint (1.0 / scope.SamplePeriod, 1, 3, "Hz"));
-			c += String.Format (f, "Viewport offset", Utils.siPrint (scope.ViewPortOffset, 1e-9, 3, "s"));
-			c += String.Format (f, "Viewport timespan", Utils.siPrint (scope.ViewPortTimeSpan, 1e-9, 3, "s"));	
 			c += String.Format (f, "Trigger holdoff", Utils.siPrint (scope.TriggerHoldOff, 1e-9, 3, "s"));
-			c += String.Format (f, "Trigger channel", scope.TriggerValue.channel);
+			c += String.Format (f, "Trigger channel", scope.TriggerValue.channel.Name);
+			c += String.Format (f, "Trigger level", Utils.siPrint(scope.TriggerValue.level, 1e-9, 3, "V"));
 			//c += String.Format (f, "Trigger value", digitalTriggerValue); Exception!
 			c += String.Format (f, "Acquisition mode", scope.AcquisitionMode.ToString ("G"));
 			c += String.Format (f, "Rolling", scope.Rolling.YesNo ());
 			c += String.Format (f, "Partial", scope.PreferPartial.YesNo ());
 			c += String.Format (f, "Logic Analyser", scope.LogicAnalyserEnabled.YesNo ());
 
-
-			string fCh = "Channel {0:s} - {1,-15:s}: {2:s}\n";
-			foreach (AnalogChannel ch in AnalogChannel.List) {
-				string chName = ch.Name;
-				c += String.Format ("======= Channel {0:s} =======\n", chName);
-				c += String.Format (fCh, chName, "Vertical offset", printVolt (scope.GetYOffset (ch)));
-				c += String.Format (fCh, chName, "Coupling", scope.GetCoupling (ch).ToString ("G"));
-				c += String.Format (fCh, chName, "Probe division", ch.Probe.ToString ());
+			if(!scope.LogicAnalyserEnabled) {
+				string fCh = "Channel {0:s} - {1,-15:s}: {2:s}\n";
+				foreach(AnalogChannel ch in AnalogChannel.List) {
+					string chName = ch.Name;
+					c += String.Format("======= Channel {0:s} =======\n", chName);
+					c += String.Format(fCh, chName, "Vertical offset", printVolt(scope.GetYOffset(ch)));
+					// don't know how to get actual min/max range
+					c += String.Format(fCh, chName, "Range values", String.Format("[{0},{1}] V", verticalRangeMin, verticalRangeMax));
+					c += String.Format(fCh, chName, "Coupling", scope.GetCoupling(ch).ToString("G"));
+					c += String.Format(fCh, chName, "Probe division", ch.Probe.Name);
+				}
 			}
+
 			c += "---------------------------------------------\n";
 			Console.Write (c);				
 		}

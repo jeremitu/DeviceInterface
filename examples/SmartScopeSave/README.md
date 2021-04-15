@@ -62,7 +62,6 @@ Selectable Acquisition Depth: 4M 2M 1M 512K 256K 128K
 Selectable Acquisition Length (s): 0.000001, 0.000002, 0.000005 ... 0.5, 1, 2
 
 ### ToDo
-- test command line options
 - test analog csv data 
 - more command line options: y offset, trigger holdoff, trigger modes (timeout, pulse, external(?))
 - allow acquisition without a trigger
