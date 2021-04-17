@@ -48,11 +48,10 @@ Digital: trigger is set to 'L' on channel 'D0' and mode is set to 'Single'.
 
 #### Notes
 
-  * Analog acquisition can also be done without a trigger using `--trigger-mode auto`.
-  * Digital acquisition always needs a trigger (without it it waits forever).
+  * Acquisition always needs a trigger. Without a trigger the scope waits forever.
 
 
-### Interactive mode
+### Interactive mode (not tested)
 
 In interactive mode the data is saved the program waits for intput and you can trigger some actions:
 
@@ -74,6 +73,6 @@ A new aquisition recreates the file (new data is *not* append).
 - test analog csv data 
 - test interactive mode
 - more command line options: y offset, trigger holdoff, trigger methods (timeout, pulse, external(?))
-- allow digital acquisition without a trigger
+- allow acquisition without a trigger
 - add mixed mode acquisition (1 analog channel + 8 digital channels)
 

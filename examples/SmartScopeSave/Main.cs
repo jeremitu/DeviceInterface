@@ -152,9 +152,9 @@ namespace SmartScopeSave {
 
           case "--trigger-mode":
             switch(args[++i].ToLower()) {
-              case "auto":
-                acquisitionMode = AcquisitionMode.AUTO;
-                break;
+              //case "auto":
+              //  acquisitionMode = AcquisitionMode.AUTO;
+              //  break;
               case "normal":
                 acquisitionMode = AcquisitionMode.NORMAL;
                 break;
@@ -254,7 +254,7 @@ namespace SmartScopeSave {
       Console.WriteLine("  --probe-1x              : using a 1x probe");
       Console.WriteLine("  --file-name <name>      : file name");
       Console.WriteLine("  --trigger-edge <param>  : analog acquisition trigger edge: [any|falling|rising]");
-      Console.WriteLine("  --trigger-mode <param>  : analog acquisition trigger mode: [auto|single]");
+      Console.WriteLine("  --trigger-mode <param>  : analog acquisition trigger mode: [normal|single]");
       Console.WriteLine("  --trigger-level <level> : analog acquisition trigger level");
       Console.WriteLine("  --range-min <range>     : analog acquisition minimum range");
       Console.WriteLine("  --range-max <range>     : analog acquisition maximum range");
@@ -424,71 +424,89 @@ namespace SmartScopeSave {
       }
 
       public void collectData(DataPackageScope p, DataSource s) {
-        if(scope.AcquisitionMode == AcquisitionMode.AUTO)
-          collectChunks(p, s);
-        else
+        //if(scope.AcquisitionMode == AcquisitionMode.AUTO)
+        //  collectChunks(p, s);
+        //else
           collectFullAcquisition(p, s);
       }
 
       public bool prepareDone = false;
       public bool finalizeDone = false;
       public uint totalSampleCount = 0;
+      //public int previousIdentifier = -1;
+      //public DateTime previousUpdate = DateTime.Now;
 
-      public void collectChunks(DataPackageScope p, DataSource s) {
+      // does not work, seems to collect lot's of triggered chunks while I only want
+      // an acquisition without a trigger 
+      //public void collectChunks(DataPackageScope p, DataSource s) {
 
-        if(finalizeDone) // ignore extra data
-          return;
+      //  if(finalizeDone) // ignore extra data
+      //    return;
 
-        int triesLeft = 20;
-        while(triesLeft >= 0) {
-          DataPackageScope dps = scope.GetScopeData();
+      //  int triesLeft = 20;
+      //  while(triesLeft >= 0) {
+      //    /*DataPackageScope dps = scope.GetScopeData();
+      //    if(dps == null) {
+      //      triesLeft--;
+      //      continue;
+      //    }*/
 
-          if(dps == null) {
-            triesLeft--;
-            continue;
-          }
-          
-          ChannelData cd = dps.GetData(ChannelDataSourceScope.Viewport, AnalogChannel.List[0]); // [0] for channel A
-          if(cd == null) {
-            Console.Write("Timeout while waiting for scope data.\n");
-            running = false;
-            return;
-          }
+      //    /*if(dps.Identifier == previousIdentifier && dps.LastDataUpdate == previousUpdate) {
+      //      scope.ForceTrigger();
+      //      continue;
+      //    }
+      //    previousUpdate = dps.LastDataUpdate;
+      //    previousIdentifier = dps.Identifier;*/
 
-          float[] va = (float[])cd.array;
-          cd = dps.GetData(ChannelDataSourceScope.Viewport, AnalogChannel.List[1]); // [1] for channel B
-          float[] vb = (float[])cd.array;
+      //    //p = LabNation.DeviceInterface.Tools.FetchLastFrame(scope);
 
-          float[] samples = new float[2];
-          if(!prepareDone) {
-            sampleSerializer.prepareForAnalogSamples(cd.samplePeriod, cd.timeOffset, getScopeMetaStrings());
-            prepareDone = true;
-          }
-          for(int i = 0; i < va.Length; i++) {
-            samples[0] = va[i];
-            samples[1] = vb[i];
-            sampleSerializer.handleAnalogSamples(samples);
-          }
-          totalSampleCount += (uint)va.Length;
-          if(totalSampleCount < scope.AcquisitionDepth) {
-            return; // collect more
-          }
-          scope.Running = true;
-          scope.CommitSettings();
-          sampleSerializer.finalize();
-          finalizeDone = true;
+      //    /*if(s.LatestDataPackage.FullAcquisitionFetchProgress >= 1f) {
+      //      ChannelData cdt = p.GetData(ChannelDataSourceScope.Acquisition, AnalogChannel.List[0]); // [0] for channel A
+      //    }*/
 
-          Console.Write(String.Format("Saved {0} samples using {1} records into file \"{2}\"\n",
-            totalSampleCount, sampleSerializer.getNumberOfSavedRecords(), sampleSerializer.getFileName()));
+      //    ChannelData cd = p.GetData(ChannelDataSourceScope.Viewport, AnalogChannel.List[0]); // [0] for channel A
+      //    if(cd == null) {
+      //      Console.Write("Timeout while waiting for scope data.\n");
+      //      running = false;
+      //      return;
+      //    }
+      //    //Console.Write($"LastDataUpdate {p.LastDataUpdate.Millisecond}");
+      //    //Console.Write($"LastDataUpdate {cd.timeOffset}");
 
-          if(optInteractive) {
-            printScopeAcqConfig();
-            Console.Write("'[Enter|R]':repeat, '[]':prev/next AcqDepth, '<>':prev/next AcqLength, 'Q|X|Esc' to Quit\n");
-          } else
-            running = false;
-          return;
-        }
-      }
+      //    float[] va = (float[])cd.array;
+      //    cd = p.GetData(ChannelDataSourceScope.Viewport, AnalogChannel.List[1]); // [1] for channel B
+      //    float[] vb = (float[])cd.array;
+
+      //    float[] samples = new float[2];
+      //    if(!prepareDone) {
+      //      sampleSerializer.prepareForAnalogSamples(cd.samplePeriod, cd.timeOffset, getScopeMetaStrings());
+      //      prepareDone = true;
+      //    }
+      //    for(int i = 0; i < va.Length; i++) {
+      //      samples[0] = va[i];
+      //      samples[1] = vb[i];
+      //      sampleSerializer.handleAnalogSamples(samples);
+      //    }
+      //    totalSampleCount += (uint)va.Length;
+      //    if(totalSampleCount < scope.AcquisitionDepth) {
+      //      return; // collect more
+      //    }
+      //    scope.Running = true;
+      //    scope.CommitSettings();
+      //    sampleSerializer.finalize();
+      //    finalizeDone = true;
+
+      //    Console.Write(String.Format("Saved {0} samples using {1} records into file \"{2}\"\n",
+      //      totalSampleCount, sampleSerializer.getNumberOfSavedRecords(), sampleSerializer.getFileName()));
+
+      //    if(optInteractive) {
+      //      printScopeAcqConfig();
+      //      Console.Write("'[Enter|R]':repeat, '[]':prev/next AcqDepth, '<>':prev/next AcqLength, 'Q|X|Esc' to Quit\n");
+      //    } else
+      //      running = false;
+      //    return;
+      //  }
+      //}
 
       public void collectFullAcquisition(DataPackageScope p, DataSource s) {
         int triesLeft = 20;
