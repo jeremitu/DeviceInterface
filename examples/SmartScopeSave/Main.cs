@@ -42,6 +42,8 @@ namespace SmartScopeSave {
     static double acquisitionLength = AcqLengthData[acqLengthIndex];
 
     static bool optInteractive = false;
+    static bool keep_config = false;
+    static bool force_trigger = false;
 
     static double triggerHoldOff = 0;
     static AcquisitionMode acquisitionMode = AcquisitionMode.SINGLE;
@@ -151,6 +153,7 @@ namespace SmartScopeSave {
             break;
 
           case "--trigger-mode":
+          case "--acq-mode":
             switch(args[++i].ToLower()) {
               //case "auto":
               //  acquisitionMode = AcquisitionMode.AUTO;
@@ -188,6 +191,14 @@ namespace SmartScopeSave {
             } catch(FormatException) {
               Console.WriteLine($"Unable to parse trigger level '{args[i]}'");
             }
+            break;
+
+          case "--force-trigger":
+            force_trigger = true;
+            break;
+
+          case "--keep-config":
+            keep_config = true;
             break;
 
           case "--file-name":
@@ -253,15 +264,18 @@ namespace SmartScopeSave {
       Console.WriteLine("  --probe-10x             : using a 10x probe");
       Console.WriteLine("  --probe-1x              : using a 1x probe");
       Console.WriteLine("  --file-name <name>      : file name");
-      Console.WriteLine("  --trigger-edge <param>  : analog acquisition trigger edge: [any|falling|rising]");
-      Console.WriteLine("  --trigger-mode <param>  : analog acquisition trigger mode: [normal|single]");
+      Console.WriteLine("  --trigger-edge <param>  : analog acquisition trigger edge: [any|falling|rising]");      
+      Console.WriteLine("  --trigger-mode <param>  : analog acquisition trigger mode: [normal|single|auto (not yet)]");
+      Console.WriteLine("  --force-trigger         : force trigger");
+      Console.WriteLine("  --acq-mode     <param>");
+      Console.WriteLine("  --keep-config           : keep acquisition configuration (eg. from scope)");
       Console.WriteLine("  --trigger-level <level> : analog acquisition trigger level");
       Console.WriteLine("  --range-min <range>     : analog acquisition minimum range");
       Console.WriteLine("  --range-max <range>     : analog acquisition maximum range");
       Console.WriteLine("  --enable-log            : enable log and print it");
       Console.WriteLine("   -h");
       Console.WriteLine("  --help                  : show this message");
-      Console.WriteLine($"Defaults: vcd({sampleSerializer.getFileName()}), non-interactive, 1M, 0.2s, trigger: 1L");
+      Console.WriteLine($"Defaults: {sampleSerializer.getName()} (file {sampleSerializer.getFileName()}), non-interactive, 1M, 0.2s, trigger: 1L");
     }
 
     static void connectHandler(IDevice dev, bool connected) {
@@ -341,13 +355,13 @@ namespace SmartScopeSave {
       }
     }
 
-    static Serializers.ISampleSerializer sampleSerializer = new Serializers.VCDSerializer();
+    static Serializers.ISampleSerializer sampleSerializer = new Serializers.CSVSerializer();
 
     public interface IAcquirer {
       void configure();
       void collectData(DataPackageScope p, DataSource s);
     }
-    static IAcquirer acquirer = new DigitalAcquirer();
+    static IAcquirer acquirer = new AnalogAcquirer();
 
     public class AnalogAcquirer : IAcquirer {
       public void configure() {
@@ -361,8 +375,30 @@ namespace SmartScopeSave {
         //Start datasource
         scope.DataSourceScope.Start();
 
-        //Configure acquisition
+        if (! keep_config)
+          configureAcquisition();
 
+
+        //Show user what he did
+        PrintScopeConfiguration();
+
+        sampleSerializer.initialize();
+
+        //Set scope running;
+        scope.Running = true;
+        scope.CommitSettings();
+
+        if (force_trigger)
+        {
+          scope.ForceTrigger();
+          Console.Write("Forced trigger\n");
+        }
+        else if (scope.AcquisitionMode != AcquisitionMode.AUTO)
+          Console.Write("Waiting for trigger\n");
+      }
+
+      public void configureAcquisition()
+      {
         /******************************/
         /* Horizontal / time settings */
         /******************************/
@@ -389,7 +425,8 @@ namespace SmartScopeSave {
         /*******************************/
         /* Vertical / voltage settings */
         /*******************************/
-        foreach(AnalogChannel ch in AnalogChannel.List) {
+        foreach (AnalogChannel ch in AnalogChannel.List)
+        {
           //FIRST set vertical range
           scope.SetVerticalRange(ch, verticalRangeMin, verticalRangeMax);
           //THEN set vertical offset (dicated by range)
@@ -399,7 +436,8 @@ namespace SmartScopeSave {
         }
 
         // Set trigger to channel A
-        scope.TriggerValue = new TriggerValue() {
+        scope.TriggerValue = new TriggerValue()
+        {
           source = TriggerSource.Channel,
           channel = AnalogChannel.ChA,
           mode = triggerMode,
@@ -409,104 +447,104 @@ namespace SmartScopeSave {
 
         //Update the scope with the current settings
         scope.CommitSettings();
-
-        //Show user what he did
-        PrintScopeConfiguration();
-
-        sampleSerializer.initialize();
-
-        //Set scope running;
-        scope.Running = true;
-        scope.CommitSettings();
-
-        if(scope.AcquisitionMode != AcquisitionMode.AUTO)
-          Console.Write("Waiting for trigger\n");
       }
 
+      // data handler
       public void collectData(DataPackageScope p, DataSource s) {
-        //if(scope.AcquisitionMode == AcquisitionMode.AUTO)
-        //  collectChunks(p, s);
-        //else
+        if(scope.AcquisitionMode == AcquisitionMode.AUTO)
+          collectChunks(p, s);
+        else
           collectFullAcquisition(p, s);
       }
 
       public bool prepareDone = false;
       public bool finalizeDone = false;
       public uint totalSampleCount = 0;
-      //public int previousIdentifier = -1;
-      //public DateTime previousUpdate = DateTime.Now;
+
+#if true
+      public int previousIdentifier = -1;
+      public DateTime previousUpdate = DateTime.Now;
 
       // does not work, seems to collect lot's of triggered chunks while I only want
       // an acquisition without a trigger 
-      //public void collectChunks(DataPackageScope p, DataSource s) {
+      public void collectChunks(DataPackageScope p, DataSource s)
+      {
 
-      //  if(finalizeDone) // ignore extra data
-      //    return;
+        if (finalizeDone) // ignore extra data
+          return;
 
-      //  int triesLeft = 20;
-      //  while(triesLeft >= 0) {
-      //    /*DataPackageScope dps = scope.GetScopeData();
-      //    if(dps == null) {
-      //      triesLeft--;
-      //      continue;
-      //    }*/
+        int triesLeft = 20;
+        while (triesLeft >= 0)
+        {
+          /*DataPackageScope dps = scope.GetScopeData();
+          if(dps == null) {
+            triesLeft--;
+            continue;
+          }*/
 
-      //    /*if(dps.Identifier == previousIdentifier && dps.LastDataUpdate == previousUpdate) {
-      //      scope.ForceTrigger();
-      //      continue;
-      //    }
-      //    previousUpdate = dps.LastDataUpdate;
-      //    previousIdentifier = dps.Identifier;*/
+          /*if(dps.Identifier == previousIdentifier && dps.LastDataUpdate == previousUpdate) {
+            scope.ForceTrigger();
+            continue;
+          }
+          previousUpdate = dps.LastDataUpdate;
+          previousIdentifier = dps.Identifier;*/
 
-      //    //p = LabNation.DeviceInterface.Tools.FetchLastFrame(scope);
+          //p = LabNation.DeviceInterface.Tools.FetchLastFrame(scope);
 
-      //    /*if(s.LatestDataPackage.FullAcquisitionFetchProgress >= 1f) {
-      //      ChannelData cdt = p.GetData(ChannelDataSourceScope.Acquisition, AnalogChannel.List[0]); // [0] for channel A
-      //    }*/
+          /*if(s.LatestDataPackage.FullAcquisitionFetchProgress >= 1f) {
+            ChannelData cdt = p.GetData(ChannelDataSourceScope.Acquisition, AnalogChannel.List[0]); // [0] for channel A
+          }*/
 
-      //    ChannelData cd = p.GetData(ChannelDataSourceScope.Viewport, AnalogChannel.List[0]); // [0] for channel A
-      //    if(cd == null) {
-      //      Console.Write("Timeout while waiting for scope data.\n");
-      //      running = false;
-      //      return;
-      //    }
-      //    //Console.Write($"LastDataUpdate {p.LastDataUpdate.Millisecond}");
-      //    //Console.Write($"LastDataUpdate {cd.timeOffset}");
+          ChannelData cd = p.GetData(ChannelDataSourceScope.Viewport, AnalogChannel.List[0]); // [0] for channel A
+          if (cd == null)
+          {
+            Console.Write("Timeout while waiting for scope data.\n");
+            running = false;
+            return;
+          }
+          //Console.Write($"LastDataUpdate {p.LastDataUpdate.Millisecond}");
+          //Console.Write($"LastDataUpdate {cd.timeOffset}");
 
-      //    float[] va = (float[])cd.array;
-      //    cd = p.GetData(ChannelDataSourceScope.Viewport, AnalogChannel.List[1]); // [1] for channel B
-      //    float[] vb = (float[])cd.array;
+          float[] va = (float[])cd.array;
+          cd = p.GetData(ChannelDataSourceScope.Viewport, AnalogChannel.List[1]); // [1] for channel B
+          float[] vb = (float[])cd.array;
 
-      //    float[] samples = new float[2];
-      //    if(!prepareDone) {
-      //      sampleSerializer.prepareForAnalogSamples(cd.samplePeriod, cd.timeOffset, getScopeMetaStrings());
-      //      prepareDone = true;
-      //    }
-      //    for(int i = 0; i < va.Length; i++) {
-      //      samples[0] = va[i];
-      //      samples[1] = vb[i];
-      //      sampleSerializer.handleAnalogSamples(samples);
-      //    }
-      //    totalSampleCount += (uint)va.Length;
-      //    if(totalSampleCount < scope.AcquisitionDepth) {
-      //      return; // collect more
-      //    }
-      //    scope.Running = true;
-      //    scope.CommitSettings();
-      //    sampleSerializer.finalize();
-      //    finalizeDone = true;
+          float[] samples = new float[2];
+          if (!prepareDone)
+          {
+            sampleSerializer.prepareForAnalogSamples(cd.samplePeriod, cd.timeOffset, getScopeMetaStrings());
+            prepareDone = true;
+          }
+          for (int i = 0; i < va.Length; i++)
+          {
+            samples[0] = va[i];
+            samples[1] = vb[i];
+            sampleSerializer.handleAnalogSamples(samples);
+          }
+          totalSampleCount += (uint)va.Length;
+          if (totalSampleCount < scope.AcquisitionDepth)
+          {
+            return; // collect more
+          }
+          scope.Running = true;
+          scope.CommitSettings();
+          sampleSerializer.finalize();
+          finalizeDone = true;
 
-      //    Console.Write(String.Format("Saved {0} samples using {1} records into file \"{2}\"\n",
-      //      totalSampleCount, sampleSerializer.getNumberOfSavedRecords(), sampleSerializer.getFileName()));
+          Console.Write(String.Format("Saved {0} samples using {1} records into file \"{2}\"\n",
+            totalSampleCount, sampleSerializer.getNumberOfSavedRecords(), sampleSerializer.getFileName()));
 
-      //    if(optInteractive) {
-      //      printScopeAcqConfig();
-      //      Console.Write("'[Enter|R]':repeat, '[]':prev/next AcqDepth, '<>':prev/next AcqLength, 'Q|X|Esc' to Quit\n");
-      //    } else
-      //      running = false;
-      //    return;
-      //  }
-      //}
+          if (optInteractive)
+          {
+            printScopeAcqConfig();
+            Console.Write("'[Enter|R]':repeat, '[]':prev/next AcqDepth, '<>':prev/next AcqLength, 'Q|X|Esc' to Quit\n");
+          }
+          else
+            running = false;
+          return;
+        }
+      }
+#endif
 
       public void collectFullAcquisition(DataPackageScope p, DataSource s) {
         int triesLeft = 20;

@@ -18,6 +18,7 @@ namespace SmartScopeSave {
 			void handleAnalogSamples(float[] samples);
 			void reopen();
 			void finalize();
+			string getName();
 			string getFileName();
 			void setFileName(string fileName);
 			ulong getNumberOfSavedRecords();
@@ -33,7 +34,8 @@ namespace SmartScopeSave {
 			protected ulong numberOfSavedRecords;
 			NumberFormatInfo nfi = new CultureInfo("en-US", false).NumberFormat;
 
-			string ISampleSerializer.getFileName() { return saveFileName; }
+      string ISampleSerializer.getName() { return "CSV"; }
+      string ISampleSerializer.getFileName() { return saveFileName; }
 			void ISampleSerializer.setFileName(string fileName) { saveFileName = fileName; }
 
 			void ISampleSerializer.initialize() {
@@ -124,8 +126,8 @@ namespace SmartScopeSave {
 				"(", ")"
 			};
 			NumberFormatInfo nfi = new CultureInfo("en-US", false).NumberFormat;
-
-			string ISampleSerializer.getFileName() { return saveFileName; }
+      string ISampleSerializer.getName() { return "VCD"; }
+      string ISampleSerializer.getFileName() { return saveFileName; }
 			void ISampleSerializer.setFileName(string fileName) { saveFileName = fileName; }
 
 			void ISampleSerializer.initialize() {
