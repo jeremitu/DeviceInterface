@@ -14,6 +14,7 @@ namespace MatlabFileIO
     {
         private BinaryWriter writeStream;
         bool hasFinished;
+        private Type t;
 
         //vars required to writeback size and dimensions at matrix finalisation
         private long totalLengthStartPosition;
@@ -23,11 +24,14 @@ namespace MatlabFileIO
         int[] dimensions = new int[2] { 0, 0 };
         int numberOfDimensions { get { return dimensions.Length; } }
         private long dataLength = 0;
+        private int  rowLength = 0;
         private long headerLength = 0;
         private int totalPaddingAdded = 0;
 
         public MatLabFileArrayWriter(Type t, string varName, BinaryWriter writeStream)
         {
+            this.t = t;
+            //check whether type is 64 bit int, as this is not supported
             if(t == typeof(Int64) || t == typeof(UInt64))
                 throw new Exception("64 bit integer arrays are not supported by matlab file format");
             this.writeStream = writeStream;
@@ -71,6 +75,14 @@ namespace MatlabFileIO
                 writeStream.Write((byte)0xcc);            
         }
 
+        
+        //JJ add single value before AddRow(). How to cast and get size from Type t?
+        public void AddFloat(float val) {
+            writeStream.Write(val);
+            dataLength += sizeof(float);
+            rowLength++;
+        }
+
         public void AddRow(object dataToAppend)
         {
             Array data = dataToAppend as Array;
@@ -80,13 +92,16 @@ namespace MatlabFileIO
                 data.SetValue(dataToAppend, 0);
             }
             //store this dimension size, and check if it is the same as any previous data stored
-            if (dimensions[1] == 0) //first data
-                dimensions[1] = data.Length;
+            rowLength += data.Length;
+            if (dimensions[0] == 0) //first data
+                dimensions[1] = rowLength;
             else //not first data
-                if (dimensions[1] != data.Length) //different size!
+                if (dimensions[1] != rowLength) //different size!
                     throw new Exception("Data to be appended has a different size than previously appended data!");
+            rowLength = 0;
             
             //dump data in stream
+            // JJ this should cast to opened type t
             int size = 0;
             if (data.GetType().Equals(typeof(byte[])))
             {
@@ -191,7 +206,7 @@ namespace MatlabFileIO
             dimensions[0]++;
         }        
 
-        public void FinishArray(Type t)
+        public void FinishArray()
         {
             totalPaddingAdded += writeStream.AdvanceTo8ByteBoundary();
             

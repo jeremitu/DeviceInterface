@@ -5,6 +5,9 @@ using LabNation.DeviceInterface.DataSources;
 using System.Threading;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using static LabNation.Common.SerialNumber;
+using System.Runtime.Remoting.Channels;
 #if WINDOWS
 using System.Windows.Forms;
 #endif
@@ -91,6 +94,9 @@ namespace SmartScopeSave {
             break;
           case "--vcd":
             sampleSerializer = new Serializers.VCDSerializer();
+            break;
+          case "--mat":
+            sampleSerializer = new Serializers.MATSerializer();
             break;
 
           case "--acq-depth":
@@ -250,6 +256,7 @@ namespace SmartScopeSave {
       Console.WriteLine("Usage:");
       Console.WriteLine("  --analog                : perform acquisition of the two analog channels");
       Console.WriteLine("  --digital               : perform acquisition of the eight digital channels");
+      Console.WriteLine("  --mat                   : save in Matlab (MAT) format");
       Console.WriteLine("  --csv                   : save in Comma Separated Values file (CSV) format");
       Console.WriteLine("  --vcd                   : save in Value Change Dump (VCD) format");
       Console.WriteLine("   -i");
@@ -358,14 +365,14 @@ namespace SmartScopeSave {
     static Serializers.ISampleSerializer sampleSerializer = new Serializers.CSVSerializer();
 
     public interface IAcquirer {
+      void prepare();
       void configure();
       void collectData(DataPackageScope p, DataSource s);
     }
     static IAcquirer acquirer = new AnalogAcquirer();
 
     public class AnalogAcquirer : IAcquirer {
-      public void configure() {
-        Logger.Info("Configuring scope");
+      public void prepare() {        
         //Stop the scope acquisition (commit setting to device)
         scope.Running = false;
         scope.CommitSettings();
@@ -376,7 +383,7 @@ namespace SmartScopeSave {
         scope.DataSourceScope.Start();
 
         if (! keep_config)
-          configureAcquisition();
+          configure();
 
 
         //Show user what he did
@@ -397,8 +404,9 @@ namespace SmartScopeSave {
           Console.Write("Waiting for trigger\n");
       }
 
-      public void configureAcquisition()
+      public void configure()
       {
+        Logger.Info("Configuring scope");
         /******************************/
         /* Horizontal / time settings */
         /******************************/
@@ -594,8 +602,7 @@ namespace SmartScopeSave {
     }
 
     public class DigitalAcquirer : IAcquirer {
-      public void configure() {
-        Logger.Info("Configuring scope");
+      public void prepare() {
 
         //Stop the scope acquisition (commit setting to device)
         scope.Running = false;
@@ -606,42 +613,8 @@ namespace SmartScopeSave {
         //Start datasource
         scope.DataSourceScope.Start();
 
-        //Configure acquisition
-
-        /******************************/
-        /* Horizontal / time settings */
-        /******************************/
-        //Disable logic analyser
-        scope.ChannelSacrificedForLogicAnalyser = AnalogChannel.ChB;
-        //Don't use rolling mode
-        scope.Rolling = false;
-        //Don't fetch overview buffer for faster transfers
-        scope.SendOverviewBuffer = false;
-        //trigger holdoff in seconds
-        scope.TriggerHoldOff = 0;
-        //Acquisition mode to Single since it does not work otherwise (wait for ever)
-        scope.AcquisitionMode = AcquisitionMode.SINGLE;
-        //Don't accept partial packages
-        scope.PreferPartial = false;
-        //Set viewport to match acquisition
-        scope.SetViewPort(0, scope.AcquisitionLength);
-
-        scope.AcquisitionDepthUserMaximum = acquisitionDepth;
-        scope.AcquisitionDepth = acquisitionDepth;
-        scope.AcquisitionLength = acquisitionLength;
-
-        // Digital trigger 
-        System.Collections.Generic.Dictionary<DigitalChannel, DigitalTriggerValue> digitalTriggers = scope.TriggerValue.Digital;
-        digitalTriggers[digitalTriggerChannel] = digitalTriggerValue;
-        scope.TriggerValue = new TriggerValue() {
-          mode = TriggerMode.Digital,
-          source = TriggerSource.Channel,
-          channel = null,
-          Digital = digitalTriggers
-        };
-
-        //Update the scope with the current settings
-        scope.CommitSettings();
+        if (!keep_config)
+          configure();
 
         //Show user what he did
         PrintScopeConfiguration();
@@ -653,6 +626,46 @@ namespace SmartScopeSave {
         scope.CommitSettings();
 
         Console.Write("Waiting for trigger\n");
+      }
+
+      public void configure() { 
+        //Configure acquisition
+        Logger.Info("Configuring scope");
+          /******************************/
+          /* Horizontal / time settings */
+          /******************************/
+          //Disable logic analyser
+          scope.ChannelSacrificedForLogicAnalyser = AnalogChannel.ChB;
+          //Don't use rolling mode
+          scope.Rolling = false;
+          //Don't fetch overview buffer for faster transfers
+          scope.SendOverviewBuffer = false;
+          //trigger holdoff in seconds
+          scope.TriggerHoldOff = 0;
+          //Acquisition mode to Single since it does not work otherwise (wait for ever)
+          scope.AcquisitionMode = AcquisitionMode.SINGLE;
+          //Don't accept partial packages
+          scope.PreferPartial = false;
+          //Set viewport to match acquisition
+          scope.SetViewPort(0, scope.AcquisitionLength);
+
+          scope.AcquisitionDepthUserMaximum = acquisitionDepth;
+          scope.AcquisitionDepth = acquisitionDepth;
+          scope.AcquisitionLength = acquisitionLength;
+
+          // Digital trigger 
+          System.Collections.Generic.Dictionary<DigitalChannel, DigitalTriggerValue> digitalTriggers = scope.TriggerValue.Digital;
+        digitalTriggers[digitalTriggerChannel] = digitalTriggerValue;
+          scope.TriggerValue = new TriggerValue()
+        {
+          mode = TriggerMode.Digital,
+            source = TriggerSource.Channel,
+            channel = null,
+            Digital = digitalTriggers
+          };
+
+        //Update the scope with the current settings
+        scope.CommitSettings();
       }
 
       public void collectData(DataPackageScope p, DataSource s) {

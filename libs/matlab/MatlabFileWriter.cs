@@ -50,8 +50,7 @@ namespace MatlabFileIO
                 if(!locker.HasFinished())
                     throw new Exception("Previous array still open!");
                 Flush();
-            }
-
+            }            
             //check whether type is not a string, as this is not supported for now
             if (t.Equals(typeof(String)))
                 throw new NotImplementedException("Writing arrays of strings is not supported (as strings are arrays already)");
@@ -77,7 +76,7 @@ namespace MatlabFileIO
                     string dataAsString = data as string;
                     MatLabFileArrayWriter charArrayWriter = OpenArray(typeof(char), name, compress);
                     charArrayWriter.AddRow(dataAsString.ToCharArray());
-                    charArrayWriter.FinishArray(typeof(char));
+                    charArrayWriter.FinishArray();
             }
             else{
                 Type t;
@@ -103,7 +102,7 @@ namespace MatlabFileIO
                     arrayWriter = OpenArray(t, name, compress);
                     arrayWriter.AddRow(data);
                 }
-                arrayWriter.FinishArray(t);
+                arrayWriter.FinishArray();
             }
         }
     }

@@ -19,7 +19,7 @@ namespace MatlabFileIO
             this.readStream = new BinaryReader(fileStream);
 
             byte[] headerBytes = readStream.ReadBytes(128);
-			//Parse header (will throw if fail)
+			      //Parse header (will throw if fail)
             new Header(headerBytes);
 
             ReadVariables();

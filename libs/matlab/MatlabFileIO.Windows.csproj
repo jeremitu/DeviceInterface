@@ -5,24 +5,24 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>10.0.0</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{E1C5DBBC-C6EB-6F63-7065-536176652E57}</ProjectGuid>
-    <OutputType>Exe</OutputType>
-    <RootNamespace>SmartScopeSave</RootNamespace>
-    <AssemblyName>SmartScopeSave</AssemblyName>
+    <ProjectGuid>{DFEBD0B1-6261-6946-6C65-494F2E57696E}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>MatlabFileIO</RootNamespace>
+    <AssemblyName>MatlabFileIO</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>1591</NoWarn>
     <TargetFrameworkVersion>v4.8.1</TargetFrameworkVersion>
     <TargetFrameworkProfile />
-    <LangVersion>6</LangVersion>
+    <LangVersion>5</LangVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <Optimize>false</Optimize>
     <DebugType>full</DebugType>
     <EnableUnmanagedDebugging>true</EnableUnmanagedDebugging>
-    <OutputPath>..\..\bin\Windows\AnyCPU\Debug\</OutputPath>
+    <OutputPath>bin\Windows\AnyCPU\Debug</OutputPath>
     <IntermediateOutputPath>obj\Windows\AnyCPU\Debug</IntermediateOutputPath>
-    <DocumentationFile>..\..\bin\Windows\AnyCPU\Debug\SmartScopeSave.xml</DocumentationFile>
+    <DocumentationFile>bin\Windows\AnyCPU\Debug\MatlabFileIO.xml</DocumentationFile>
     <DefineConstants>DEBUG;TRACE;WINDOWS</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -31,9 +31,9 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <Optimize>true</Optimize>
     <DebugType>none</DebugType>
-    <OutputPath>..\..\bin\Windows\AnyCPU\Release\</OutputPath>
+    <OutputPath>bin\Windows\AnyCPU\Release</OutputPath>
     <IntermediateOutputPath>obj\Windows\AnyCPU\Release</IntermediateOutputPath>
-    <DocumentationFile>..\..\bin\Windows\AnyCPU\Release\SmartScopeSave.xml</DocumentationFile>
+    <DocumentationFile>bin\Windows\AnyCPU\Release\MatlabFileIO.xml</DocumentationFile>
     <DefineConstants>TRACE;WINDOWS</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -41,15 +41,25 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
-    <Reference Include="System.Windows.Forms" />
-    <Reference Include="System.Drawing" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+    <Reference Include="Zlib.Portable">
+      <HintPath>..\..\packages\Zlib.Portable.1.10.0\lib\portable-net4+sl5+wp8+win8+wpa81+MonoTouch+MonoAndroid\Zlib.Portable.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Main.cs" />
-    <Compile Include="Serializers.cs" />
+    <Compile Include="MatlabFileArrayWriter.cs" />
+    <Compile Include="MatlabFileHelper.cs" />
+    <Compile Include="MatlabFileReader.cs" />
+    <Compile Include="MatlabFileWriter.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup />
-  <ItemGroup />
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
   <ItemGroup />
   <ItemGroup />
   <ItemGroup />
@@ -67,23 +77,10 @@
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <_PostBuildHookTimestamp>@(IntermediateAssembly->'%(FullPath).timestamp')</_PostBuildHookTimestamp>
+    <_PostBuildHookTimestamp>@(IntermediateAssembly-&gt;'%(FullPath).timestamp')</_PostBuildHookTimestamp>
   </PropertyGroup>
   <Target Name="PostBuildHooks" Inputs="@(IntermediateAssembly);@(ReferencePath)" Outputs="@(IntermediateAssembly);$(_PostBuildHookTimestamp)" AfterTargets="CoreCompile" BeforeTargets="AfterCompile">
     <Touch Files="$(_PostBuildHookTimestamp)" AlwaysCreate="True" />
   </Target>
-  <ItemGroup>
-    <ProjectReference Include="..\..\libs\common\Common.Windows.csproj">
-      <Project>{6D6D6F43-6E6F-572E-696E-646F7773436F}</Project>
-      <Name>Common.Windows</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\DeviceInterface.Windows.csproj">
-      <Project>{CDE4CE9B-DCD2-6EBC-7465-72666163652E}</Project>
-      <Name>DeviceInterface.Windows</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\libs\matlab\MatlabFileIO.Windows.csproj">
-      <Project>{dfebd0b1-6261-6946-6c65-494f2e57696e}</Project>
-      <Name>MatlabFileIO.Windows</Name>
-    </ProjectReference>
-  </ItemGroup>
+  <ItemGroup />
 </Project>
