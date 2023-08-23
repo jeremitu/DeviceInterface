@@ -47,6 +47,7 @@ namespace SmartScopeSave {
     static bool optInteractive = false;
     static bool keep_config = false;
     static bool force_trigger = false;
+    static bool allow_dummy = false;
 
     static double triggerHoldOff = 0;
     static AcquisitionMode acquisitionMode = AcquisitionMode.SINGLE;
@@ -65,8 +66,6 @@ namespace SmartScopeSave {
     static float verticalRangeMax = 3;
     static Probe probe = Probe.DefaultX10Probe;
 
-    // ToDo
-    //   allow no trigger and use scope.ForceTrigger();
 
     [STAThread]
     static void Main(string[] args) {
@@ -215,6 +214,11 @@ namespace SmartScopeSave {
             loggingEnabled = true;
             break;
 
+          case "--allow-dummy":
+            allow_dummy = true;
+            break;
+            
+
           case "-h":
           case "--help":
           default:
@@ -280,6 +284,7 @@ namespace SmartScopeSave {
       Console.WriteLine("  --range-min <range>     : analog acquisition minimum range");
       Console.WriteLine("  --range-max <range>     : analog acquisition maximum range");
       Console.WriteLine("  --enable-log            : enable log and print it");
+      Console.WriteLine("  --enable-dummy          : allow connection to DummyScope for testing");
       Console.WriteLine("   -h");
       Console.WriteLine("  --help                  : show this message");
       Console.WriteLine($"Defaults: {sampleSerializer.getName()} (file {sampleSerializer.getFileName()}), non-interactive, 1M, 0.2s, trigger: 1L");
@@ -288,10 +293,10 @@ namespace SmartScopeSave {
     static void connectHandler(IDevice dev, bool connected) {
       //Only accept devices of the IScope type (i.e. not IWaveGenerator)
       //and block out the fallback device (dummy scope)
-      if(connected && dev is IScope && !(dev is DummyScope)) {
+      if(connected && dev is IScope && (!(dev is DummyScope) || allow_dummy)) {
         Logger.Info("Device connected of type " + dev.GetType().Name + " with serial " + dev.Serial);
         scope = (IScope)dev;
-        acquirer.configure();
+        acquirer.prepare();
       } else {
         scope = null;
       }
