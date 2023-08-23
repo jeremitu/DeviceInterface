@@ -6,16 +6,16 @@
         <Version>v9.0</Version>
       </Platform>
     <Platform Name="Windows">
-        <Version>v4.5</Version>
+        <Version>v4.8.1</Version>
       </Platform>
       <Platform Name="WindowsGL">
         <Version>v4.0</Version>
       </Platform>
       <Platform Name="MacOS">
-        <Version>v4.5</Version>
+        <Version>v4.8.1</Version>
       </Platform>
       <Platform Name="Linux">
-        <Version>v4.5</Version>
+        <Version>v4.8.1</Version>
       </Platform>
     </FrameworkVersions>
     <LangVersion>5</LangVersion>
